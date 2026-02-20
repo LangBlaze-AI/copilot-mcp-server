@@ -45,11 +45,11 @@ Plans:
   3. Auth tokens (`COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, `GITHUB_TOKEN`) never appear in error messages or server logs
   4. Tool calls time out after 60 seconds and return a timeout error rather than hanging indefinitely
   5. Stdout is stripped of ANSI escape codes before being returned to the caller, and `COPILOT_BINARY_PATH` env var overrides the default binary path
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: Tighten exit code logic to exit-code-0-only success; implement ENOENT, quota, and auth error detection with user-facing messages; add `COPILOT_BINARY_PATH` support
-- [ ] 02-02: Add ANSI stripping, 60-second timeout, and auth token redaction; write error-scenario tests for ENOENT, quota, and auth failure
+- [ ] 02-01-PLAN.md — Harden errors.ts (scrubTokens), command.ts (ENOENT detection, native 60s timeout, scrub stderr log), handlers.ts (getCopilotBinary, ANSI stripping, error classification)
+- [ ] 02-02-PLAN.md — Extend error-scenarios.test.ts: ENOENT, quota, auth, timeout, ANSI stripping, token scrubbing tests; final full suite verification
 
 ### Phase 3: Branding and Documentation
 **Goal**: All project artifacts (package name, server class, README) reflect Copilot branding and accurate prerequisites; users can follow the README to install and authenticate without referencing Codex docs

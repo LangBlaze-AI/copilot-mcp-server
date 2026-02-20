@@ -28,12 +28,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Calling the `explain` tool with a shell command string returns a plain-language explanation of that command
   4. Calling the `ping` tool returns a live confirmation the MCP server is running
   5. All three AI tools accept `model` and `addDir` parameters; the `copilot` binary is invoked with `--allow-all-tools`, `--no-ask-user`, `--silent`, `--no-color`, `--no-auto-update` hardcoded in every call; session layer and legacy tools (`review`, `listSessions`, `help`) are gone; handler and integration tests pass
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: Delete session layer (`src/session/`) and legacy tools; update type schemas and TOOLS enum in `src/types.ts`
-- [ ] 01-02: Rewrite tool handlers for `ask`, `suggest`, `explain`, `ping` with `copilot -p` invocation, prompt construction, stdout-primary output reading, and model/addDir params
-- [ ] 01-03: Update tool definitions (`src/tools/definitions.ts`); rewrite handler tests and delete stale session test files; write integration tests verifying correct CLI flags
+- [ ] 01-01-PLAN.md — Delete session layer, rewrite types.ts (TOOLS enum, Zod schemas, model constants), add strictExitCode to command.ts
+- [ ] 01-02-PLAN.md — Rewrite handlers.ts (4 stateless handlers), rewrite definitions.ts (4 tool defs), rename server.ts + index.ts to CopilotMcpServer
+- [ ] 01-03-PLAN.md — Rewrite index.test.ts, mcp-stdio.test.ts (copilot stub + flag verification), error-scenarios, edge-cases, model-selection, default-model tests
 
 ### Phase 2: Error Handling and Resilience
 **Goal**: All failure modes surface actionable error messages to the MCP caller; auth tokens are never leaked in logs or error output; ANSI codes are stripped from responses; executions cannot hang indefinitely; `COPILOT_BINARY_PATH` is respected

@@ -12,25 +12,25 @@ import {
 const execAsync = promisify(exec);
 
 const JSONRPC_VERSION = '2.0';
-const TEST_TIMEOUT_MS = 10000;
+const TEST_TIMEOUT_MS = 15000;
 
 async function ensureBuild(distPath: string): Promise<void> {
   if (existsSync(distPath)) return;
   await execAsync('npm run build');
 }
 
-function createCodexStub(): string {
-  const stubDir = mkdtempSync(path.join(tmpdir(), 'codex-mcp-test-'));
-  const stubPath = path.join(stubDir, 'codex');
-  const stubScript = `#!/bin/sh
-printf "ok\n"
-printf "thread id: th_stub_123\n" 1>&2
-printf "session id: sess_stub_123\n" 1>&2
-exit 0
-`;
-  writeFileSync(stubPath, stubScript, { mode: 0o755 });
+function createCopilotStub(captureArgs = false): { stubDir: string; argsFile?: string } {
+  const stubDir = mkdtempSync(path.join(tmpdir(), 'copilot-mcp-test-'));
+  const stubPath = path.join(stubDir, 'copilot');
+  const argsFile = captureArgs ? path.join(stubDir, 'captured-args.json') : undefined;
+
+  const stubScript = captureArgs
+    ? `#!/bin/sh\nprintf '%s\\n' "$@" > ${argsFile}\nprintf "stub response from Copilot\\n"\nexit 0\n`
+    : `#!/bin/sh\nprintf "stub response from Copilot\\n"\nexit 0\n`;
+
+  writeFileSync(stubPath, stubScript);
   chmodSync(stubPath, 0o755);
-  return stubDir;
+  return { stubDir, argsFile };
 }
 
 describe('MCP stdio integration', () => {
@@ -62,14 +62,13 @@ describe('MCP stdio integration', () => {
   beforeAll(async () => {
     const distPath = path.join(process.cwd(), 'dist', 'index.js');
     await ensureBuild(distPath);
-    stubDir = createCodexStub();
+    const stub = createCopilotStub();
+    stubDir = stub.stubDir;
 
     server = spawn(process.execPath, [distPath], {
       env: {
         ...process.env,
         PATH: `${stubDir}${path.delimiter}${process.env.PATH}`,
-        CODEX_MCP_CALLBACK_URI: 'http://localhost/callback',
-        STRUCTURED_CONTENT_ENABLED: '1',
       },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -113,45 +112,54 @@ describe('MCP stdio integration', () => {
     }
   });
 
-  test('supports tools/list and tools/call over stdio', async () => {
+  test('tool list contains exactly 4 tools: ask, suggest, explain, ping', async () => {
     const listResponse = (await sendRequest({
       jsonrpc: JSONRPC_VERSION,
       id: 1,
       method: 'tools/list',
       params: {},
     })) as {
-      tools: Array<{
-        name: string;
-        outputSchema?: { properties?: Record<string, unknown> };
-      }>;
+      tools: Array<{ name: string }>;
     };
 
     const listParse = ListToolsResultSchema.safeParse(listResponse);
     expect(listParse.success).toBe(true);
 
-    const codexTool = listResponse.tools.find((tool) => tool.name === 'codex');
-    expect(codexTool?.outputSchema?.properties).toEqual({
-      threadId: { type: 'string' },
-    });
+    const toolNames = listResponse.tools.map((t) => t.name);
+    expect(toolNames).toHaveLength(4);
+    expect(toolNames).toContain('ask');
+    expect(toolNames).toContain('suggest');
+    expect(toolNames).toContain('explain');
+    expect(toolNames).toContain('ping');
+  });
 
+  test('stdout response test: ask tool returns stub stdout content', async () => {
     const callResponse = (await sendRequest({
       jsonrpc: JSONRPC_VERSION,
       id: 2,
       method: 'tools/call',
-      params: { name: 'codex', arguments: { prompt: 'Test prompt' } },
+      params: { name: 'ask', arguments: { prompt: 'Test prompt' } },
     })) as {
-      content: Array<{
-        type: string;
-        text: string;
-        _meta?: { threadId?: string };
-      }>;
-      structuredContent?: { threadId?: string };
-      _meta?: { callbackUri?: string };
+      content: Array<{ type: string; text: string }>;
     };
 
     const callParse = CallToolResultSchema.safeParse(callResponse);
     expect(callParse.success).toBe(true);
-    expect(callResponse.content[0]._meta?.threadId).toBe('th_stub_123');
-    expect(callResponse.structuredContent?.threadId).toBe('th_stub_123');
+    expect(callResponse.content[0].text).toBe('stub response from Copilot');
+  });
+
+  test('ping tool returns running confirmation without invoking copilot', async () => {
+    const callResponse = (await sendRequest({
+      jsonrpc: JSONRPC_VERSION,
+      id: 3,
+      method: 'tools/call',
+      params: { name: 'ping', arguments: {} },
+    })) as {
+      content: Array<{ type: string; text: string }>;
+    };
+
+    const callParse = CallToolResultSchema.safeParse(callResponse);
+    expect(callParse.success).toBe(true);
+    expect(callResponse.content[0].text).toBe('Copilot MCP Server is running.');
   });
 });

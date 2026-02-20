@@ -1,142 +1,95 @@
-import { CodexToolHandler } from '../tools/handlers.js';
-import { InMemorySessionStorage } from '../session/storage.js';
+import {
+  AskToolHandler,
+  SuggestToolHandler,
+} from '../tools/handlers.js';
 import { executeCommand } from '../utils/command.js';
+import { DEFAULT_COPILOT_MODEL, COPILOT_DEFAULT_MODEL_ENV_VAR } from '../types.js';
 
 // Mock the command execution
 jest.mock('../utils/command.js', () => ({
   executeCommand: jest.fn(),
 }));
 
-const mockedExecuteCommand = executeCommand as jest.MockedFunction<
-  typeof executeCommand
->;
+jest.mock('chalk', () => ({
+  default: {
+    blue: (text: string) => text,
+    yellow: (text: string) => text,
+    green: (text: string) => text,
+    red: (text: string) => text,
+  },
+}));
 
-describe('Edge Cases and Integration Issues', () => {
-  let handler: CodexToolHandler;
-  let sessionStorage: InMemorySessionStorage;
+const mockedExecuteCommand = executeCommand as jest.MockedFunction<typeof executeCommand>;
 
+function getCallArgs(): string[] {
+  const call = mockedExecuteCommand.mock.calls[0];
+  if (!call) throw new Error('executeCommand was not called');
+  const args = call[1];
+  if (!args) throw new Error('No args in call');
+  return args;
+}
+
+describe('Edge Cases and Copilot Patterns', () => {
   beforeEach(() => {
-    sessionStorage = new InMemorySessionStorage();
-    handler = new CodexToolHandler(sessionStorage);
     mockedExecuteCommand.mockClear();
+    mockedExecuteCommand.mockResolvedValue({ stdout: 'Copilot response', stderr: '' });
+    delete process.env[COPILOT_DEFAULT_MODEL_ENV_VAR];
   });
 
-  test('should handle model parameters with resume', async () => {
-    const sessionId = sessionStorage.createSession();
-    sessionStorage.setCodexConversationId(sessionId, 'existing-conv-id');
-
-    mockedExecuteCommand.mockResolvedValue({ stdout: 'Response', stderr: '' });
-
-    // User wants to change model in existing session
-    await handler.execute({
-      prompt: 'Use different model',
-      sessionId,
-      model: 'gpt-4',
-      reasoningEffort: 'high',
-    });
-
-    // Resume mode: all exec options must come BEFORE 'resume' subcommand
-    const call = mockedExecuteCommand.mock.calls[0];
-    expect(call[1]).toEqual([
-      'exec',
-      '--skip-git-repo-check',
-      '-c',
-      'model="gpt-4"',
-      '-c',
-      'model_reasoning_effort="high"',
-      'resume',
-      'existing-conv-id',
-      'Use different model',
-    ]);
+  afterEach(() => {
+    delete process.env[COPILOT_DEFAULT_MODEL_ENV_VAR];
   });
 
-  test('should handle missing session ID gracefully', async () => {
-    mockedExecuteCommand.mockResolvedValue({
-      stdout: 'Response without session ID',
-      stderr: 'Some other output', // No session ID pattern
-    });
+  test('SuggestToolHandler with no target uses default prompt', async () => {
+    const handler = new SuggestToolHandler();
+    await handler.execute({ prompt: 'list files' });
 
-    const sessionId = sessionStorage.createSession();
-    await handler.execute({
-      prompt: 'Test prompt',
-      sessionId,
-    });
-
-    // Should not crash, codex session ID should be undefined
-    expect(sessionStorage.getCodexConversationId(sessionId)).toBeUndefined();
+    const args = getCallArgs();
+    const promptArg = args[1];
+    expect(promptArg).toContain('Suggest a command to accomplish: list files');
   });
 
-  test('should handle various session ID formats', async () => {
-    const testCases = [
-      'session id: abc-123-def',
-      'Session ID: XYZ789',
-      'session id:uuid-format-here',
-      'Session id:  spaced-format  ',
-    ];
+  test('model parameter is passed through to executeCommand args', async () => {
+    const handler = new AskToolHandler();
+    await handler.execute({ prompt: 'test', model: 'gpt-4o' });
 
-    for (const [index, stderr] of testCases.entries()) {
-      const sessionId = sessionStorage.createSession();
-      mockedExecuteCommand.mockResolvedValue({ stdout: 'Response', stderr });
-
-      await handler.execute({
-        prompt: `Test ${index}`,
-        sessionId,
-      });
-
-      const extractedId = sessionStorage.getCodexConversationId(sessionId);
-      expect(extractedId).toBeDefined();
-      expect(extractedId).not.toContain('session');
-      expect(extractedId).not.toContain(':');
-    }
+    const args = getCallArgs();
+    const modelIndex = args.indexOf('--model');
+    expect(modelIndex).toBeGreaterThan(-1);
+    expect(args[modelIndex + 1]).toBe('gpt-4o');
   });
 
-  test('should handle command execution failures', async () => {
-    mockedExecuteCommand.mockRejectedValue(new Error('Codex CLI not found'));
+  test('addDir parameter results in --add-dir in executeCommand args', async () => {
+    const handler = new AskToolHandler();
+    await handler.execute({ prompt: 'test', addDir: '/absolute/path' });
 
-    await expect(handler.execute({ prompt: 'Test prompt' })).rejects.toThrow(
-      'Failed to execute codex command'
-    );
+    const args = getCallArgs();
+    const addDirIndex = args.indexOf('--add-dir');
+    expect(addDirIndex).toBeGreaterThan(-1);
+    expect(args[addDirIndex + 1]).toBe('/absolute/path');
   });
 
-  test('should handle empty/malformed CLI responses', async () => {
-    mockedExecuteCommand.mockResolvedValue({ stdout: '', stderr: '' });
+  test('COPILOT_DEFAULT_MODEL_ENV_VAR is used when model param is not provided', async () => {
+    process.env[COPILOT_DEFAULT_MODEL_ENV_VAR] = 'claude-sonnet-4-5';
+    const handler = new AskToolHandler();
+    await handler.execute({ prompt: 'test' });
 
-    const result = await handler.execute({ prompt: 'Test prompt' });
-
-    expect(result.content[0].text).toBe('No output from Codex');
+    const args = getCallArgs();
+    const modelIndex = args.indexOf('--model');
+    expect(args[modelIndex + 1]).toBe('claude-sonnet-4-5');
   });
 
-  test('should validate prompt parameter exists', async () => {
-    await expect(
-      handler.execute({}) // Missing required prompt
-    ).rejects.toThrow();
+  test('empty prompt string is accepted by Zod schema', async () => {
+    const handler = new AskToolHandler();
+    await expect(handler.execute({ prompt: '' })).resolves.toBeDefined();
   });
 
-  test('should handle long conversation contexts', async () => {
-    const sessionId = sessionStorage.createSession();
+  test('default model gpt-4.1 is used when no model or env var provided', async () => {
+    const handler = new AskToolHandler();
+    await handler.execute({ prompt: 'test' });
 
-    // Add many turns to test context building
-    for (let i = 0; i < 10; i++) {
-      sessionStorage.addTurn(sessionId, {
-        prompt: `Question ${i}`,
-        response: `Answer ${i}`.repeat(100), // Long responses
-        timestamp: new Date(),
-      });
-    }
-
-    mockedExecuteCommand.mockResolvedValue({ stdout: 'Response', stderr: '' });
-
-    await handler.execute({
-      prompt: 'Final question',
-      sessionId,
-    });
-
-    // Should only use recent turns, not crash with too much context
-    const call = mockedExecuteCommand.mock.calls[0];
-    const prompt = call?.[1]?.[4]; // After exec, --model, gpt-5.3-codex, --skip-git-repo-check, prompt
-    expect(typeof prompt).toBe('string');
-    if (prompt) {
-      expect(prompt.length).toBeLessThan(5000); // Reasonable limit
-    }
+    const args = getCallArgs();
+    const modelIndex = args.indexOf('--model');
+    expect(args[modelIndex + 1]).toBe(DEFAULT_COPILOT_MODEL);
   });
 });

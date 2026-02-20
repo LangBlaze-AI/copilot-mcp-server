@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 
 import chalk from 'chalk';
-import { CodexMcpServer } from './server.js';
+import { CopilotMcpServer } from './server.js';
 
 const SERVER_CONFIG = {
-  name: 'codex-mcp-server',
+  name: 'Copilot MCP Server',
   version: '0.0.6',
 } as const;
 
 async function main(): Promise<void> {
   try {
-    const server = new CodexMcpServer(SERVER_CONFIG);
+    const server = new CopilotMcpServer(SERVER_CONFIG);
     await server.start();
   } catch (error) {
     console.error(chalk.red('Failed to start server:'), error);

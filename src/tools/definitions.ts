@@ -1,175 +1,64 @@
-import { TOOLS, getModelDescription, type ToolDefinition } from '../types.js';
+import { TOOLS, type ToolDefinition } from '../types.js';
 
 export const toolDefinitions: ToolDefinition[] = [
   {
-    name: TOOLS.CODEX,
-    description: 'Execute Codex CLI in non-interactive mode for AI assistance',
+    name: TOOLS.ASK,
+    description:
+      'Ask GitHub Copilot a question or give it a task using natural language. ' +
+      'Copilot runs in agent mode with --allow-all-tools enabled, meaning it can execute ' +
+      'shell commands and read files on your behalf. Use this for open-ended coding questions, ' +
+      'code generation, refactoring guidance, or any task requiring Copilot\'s full capabilities.',
     inputSchema: {
       type: 'object',
       properties: {
-        prompt: {
-          type: 'string',
-          description: 'The coding task, question, or analysis request',
-        },
-        sessionId: {
-          type: 'string',
-          description:
-            'Optional session ID for conversational context. Note: when resuming a session, sandbox/fullAuto/workingDirectory parameters are not applied (CLI limitation)',
-        },
-        resetSession: {
-          type: 'boolean',
-          description:
-            'Reset the session history before processing this request',
-        },
-        model: {
-          type: 'string',
-          description: getModelDescription('codex'),
-        },
-        reasoningEffort: {
-          type: 'string',
-          enum: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'],
-          description:
-            'Control reasoning depth (none < minimal < low < medium < high < xhigh)',
-        },
-        sandbox: {
-          type: 'string',
-          enum: ['read-only', 'workspace-write', 'danger-full-access'],
-          description:
-            'Sandbox policy for shell command execution. read-only: no writes allowed, workspace-write: writes only in workspace, danger-full-access: full system access (dangerous)',
-        },
-        fullAuto: {
-          type: 'boolean',
-          description:
-            'Enable full-auto mode: sandboxed automatic execution without approval prompts (equivalent to -a on-request --sandbox workspace-write)',
-        },
-        workingDirectory: {
-          type: 'string',
-          description:
-            'Working directory for the agent to use as its root (passed via -C flag)',
-        },
-        callbackUri: {
-          type: 'string',
-          description:
-            'Static MCP callback URI to pass to Codex via environment (if provided)',
-        },
+        prompt: { type: 'string', description: 'The natural language prompt or question for Copilot' },
+        model: { type: 'string', description: 'AI model to use (default: gpt-4.1). Example: gpt-4o, claude-sonnet-4-5' },
+        addDir: { type: 'string', description: 'Absolute path to an additional directory to expose to the Copilot agent' },
       },
       required: ['prompt'],
     },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        threadId: { type: 'string' },
-      },
-    },
-    annotations: {
-      title: 'Execute Codex CLI',
-      readOnlyHint: false,
-      destructiveHint: true,
-      idempotentHint: false,
-      openWorldHint: true,
-    },
   },
   {
-    name: TOOLS.REVIEW,
+    name: TOOLS.SUGGEST,
     description:
-      'Run a code review against the current repository using Codex CLI',
+      'Ask GitHub Copilot to suggest a shell, git, or gh CLI command for a given task. ' +
+      'Use the optional target parameter to scope the suggestion type.',
     inputSchema: {
       type: 'object',
       properties: {
-        prompt: {
+        prompt: { type: 'string', description: 'Describe what you want to accomplish' },
+        target: {
           type: 'string',
-          description:
-            'Custom review instructions or focus areas (cannot be used with uncommitted=true; use base/commit review instead)',
+          enum: ['shell', 'git', 'gh'],
+          description: 'Scope the command suggestion: shell (default), git, or gh (GitHub CLI)',
         },
-        uncommitted: {
-          type: 'boolean',
-          description:
-            'Review staged, unstaged, and untracked changes (working tree) - cannot be combined with custom prompt',
-        },
-        base: {
-          type: 'string',
-          description:
-            'Review changes against a specific base branch (e.g., "main", "develop")',
-        },
-        commit: {
-          type: 'string',
-          description: 'Review the changes introduced by a specific commit SHA',
-        },
-        title: {
-          type: 'string',
-          description: 'Optional title to display in the review summary',
-        },
-        model: {
-          type: 'string',
-          description: getModelDescription('review'),
-        },
-        workingDirectory: {
-          type: 'string',
-          description:
-            'Working directory to run the review in (passed via -C as a global Codex option)',
-        },
+        model: { type: 'string', description: 'AI model to use (default: gpt-4.1)' },
+        addDir: { type: 'string', description: 'Absolute path to an additional directory to expose to the Copilot agent' },
       },
-      required: [],
+      required: ['prompt'],
     },
-    annotations: {
-      title: 'Code Review',
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: true,
+  },
+  {
+    name: TOOLS.EXPLAIN,
+    description:
+      'Ask GitHub Copilot to explain what a shell command does in plain language.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        command: { type: 'string', description: 'The shell command string to explain' },
+        model: { type: 'string', description: 'AI model to use (default: gpt-4.1)' },
+        addDir: { type: 'string', description: 'Absolute path to an additional directory to expose to the Copilot agent' },
+      },
+      required: ['command'],
     },
   },
   {
     name: TOOLS.PING,
-    description: 'Test MCP server connection',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        message: {
-          type: 'string',
-          description: 'Message to echo back',
-        },
-      },
-      required: [],
-    },
-    annotations: {
-      title: 'Ping Server',
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  {
-    name: TOOLS.HELP,
-    description: 'Get Codex CLI help information',
+    description: 'Verify that the Copilot MCP server is running and responsive.',
     inputSchema: {
       type: 'object',
       properties: {},
       required: [],
-    },
-    annotations: {
-      title: 'Get Help',
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  {
-    name: TOOLS.LIST_SESSIONS,
-    description: 'List all active conversation sessions with metadata',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-      required: [],
-    },
-    annotations: {
-      title: 'List Sessions',
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
     },
   },
 ];

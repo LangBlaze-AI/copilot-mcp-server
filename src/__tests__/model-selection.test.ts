@@ -1,177 +1,76 @@
-import { CodexToolHandler } from '../tools/handlers.js';
-import { InMemorySessionStorage } from '../session/storage.js';
+import { AskToolHandler } from '../tools/handlers.js';
 import { executeCommand } from '../utils/command.js';
+import { COPILOT_DEFAULT_MODEL_ENV_VAR, DEFAULT_COPILOT_MODEL } from '../types.js';
 
 // Mock the command execution
 jest.mock('../utils/command.js', () => ({
   executeCommand: jest.fn(),
 }));
 
-const mockedExecuteCommand = executeCommand as jest.MockedFunction<
-  typeof executeCommand
->;
+jest.mock('chalk', () => ({
+  default: {
+    blue: (text: string) => text,
+    yellow: (text: string) => text,
+    green: (text: string) => text,
+    red: (text: string) => text,
+  },
+}));
 
-describe('Model Selection and Reasoning Effort', () => {
-  let handler: CodexToolHandler;
-  let sessionStorage: InMemorySessionStorage;
-  let originalStructuredContent: string | undefined;
+const mockedExecuteCommand = executeCommand as jest.MockedFunction<typeof executeCommand>;
 
-  beforeAll(() => {
-    originalStructuredContent = process.env.STRUCTURED_CONTENT_ENABLED;
-  });
+function getCallArgs(): string[] {
+  const call = mockedExecuteCommand.mock.calls[0];
+  if (!call) throw new Error('executeCommand was not called');
+  const args = call[1];
+  if (!args) throw new Error('No args in call');
+  return args;
+}
 
-  afterAll(() => {
-    if (originalStructuredContent) {
-      process.env.STRUCTURED_CONTENT_ENABLED = originalStructuredContent;
-    } else {
-      delete process.env.STRUCTURED_CONTENT_ENABLED;
-    }
-  });
-
+describe('Model Selection', () => {
   beforeEach(() => {
-    sessionStorage = new InMemorySessionStorage();
-    handler = new CodexToolHandler(sessionStorage);
     mockedExecuteCommand.mockClear();
-    mockedExecuteCommand.mockResolvedValue({
-      stdout: 'Test response',
-      stderr: '',
-    });
-    process.env.STRUCTURED_CONTENT_ENABLED = '1';
+    mockedExecuteCommand.mockResolvedValue({ stdout: 'response', stderr: '' });
+    delete process.env[COPILOT_DEFAULT_MODEL_ENV_VAR];
   });
 
-  test('should pass model parameter to codex CLI', async () => {
-    await handler.execute({
-      prompt: 'Test prompt',
-      model: 'gpt-4',
-    });
-
-    expect(mockedExecuteCommand).toHaveBeenCalledWith('codex', [
-      'exec',
-      '--model',
-      'gpt-4',
-      '--skip-git-repo-check',
-      'Test prompt',
-    ]);
+  afterEach(() => {
+    delete process.env[COPILOT_DEFAULT_MODEL_ENV_VAR];
   });
 
-  test('should pass reasoning effort to codex CLI', async () => {
-    await handler.execute({
-      prompt: 'Complex analysis',
-      reasoningEffort: 'high',
-    });
+  test('passing model gpt-4o results in --model gpt-4o in executeCommand args', async () => {
+    const handler = new AskToolHandler();
+    await handler.execute({ prompt: 'test', model: 'gpt-4o' });
 
-    expect(mockedExecuteCommand).toHaveBeenCalledWith('codex', [
-      'exec',
-      '--model',
-      'gpt-5.3-codex',
-      '-c',
-      'model_reasoning_effort="high"',
-      '--skip-git-repo-check',
-      'Complex analysis',
-    ]);
+    const args = getCallArgs();
+    const modelIndex = args.indexOf('--model');
+    expect(args[modelIndex + 1]).toBe('gpt-4o');
   });
 
-  test('should combine model and reasoning effort', async () => {
-    await handler.execute({
-      prompt: 'Advanced task',
-      model: 'gpt-4',
-      reasoningEffort: 'medium',
-    });
+  test('passing model claude-sonnet-4-5 results in --model claude-sonnet-4-5', async () => {
+    const handler = new AskToolHandler();
+    await handler.execute({ prompt: 'test', model: 'claude-sonnet-4-5' });
 
-    expect(mockedExecuteCommand).toHaveBeenCalledWith('codex', [
-      'exec',
-      '--model',
-      'gpt-4',
-      '-c',
-      'model_reasoning_effort="medium"',
-      '--skip-git-repo-check',
-      'Advanced task',
-    ]);
+    const args = getCallArgs();
+    const modelIndex = args.indexOf('--model');
+    expect(args[modelIndex + 1]).toBe('claude-sonnet-4-5');
   });
 
-  test('should include model info in response metadata', async () => {
-    const result = await handler.execute({
-      prompt: 'Test prompt',
-      model: 'gpt-3.5-turbo',
-      reasoningEffort: 'low',
-    });
+  test('not passing model results in --model gpt-4.1 (DEFAULT_COPILOT_MODEL)', async () => {
+    const handler = new AskToolHandler();
+    await handler.execute({ prompt: 'test' });
 
-    expect(result.content[0]._meta?.model).toBe('gpt-3.5-turbo');
-    expect(result.structuredContent?.model).toBe('gpt-3.5-turbo');
+    const args = getCallArgs();
+    const modelIndex = args.indexOf('--model');
+    expect(args[modelIndex + 1]).toBe(DEFAULT_COPILOT_MODEL);
   });
 
-  test('should work with sessions and model selection', async () => {
-    const sessionId = sessionStorage.createSession();
+  test('model from COPILOT_DEFAULT_MODEL_ENV_VAR is used when model param is absent', async () => {
+    process.env[COPILOT_DEFAULT_MODEL_ENV_VAR] = 'custom-model';
+    const handler = new AskToolHandler();
+    await handler.execute({ prompt: 'test' });
 
-    const result = await handler.execute({
-      prompt: 'Session test',
-      sessionId,
-      model: 'gpt-4',
-    });
-
-    expect(result.content[0]._meta?.model).toBe('gpt-4');
-    expect(result.content[0]._meta?.sessionId).toBe(sessionId);
-    expect(result.structuredContent?.model).toBe('gpt-4');
-    expect(result.structuredContent?.sessionId).toBe(sessionId);
-  });
-
-  test('should validate reasoning effort enum', async () => {
-    await expect(
-      handler.execute({
-        prompt: 'Test',
-        reasoningEffort: 'invalid' as 'low',
-      })
-    ).rejects.toThrow();
-  });
-
-  test('should pass minimal reasoning effort to CLI', async () => {
-    await handler.execute({
-      prompt: 'Quick task',
-      reasoningEffort: 'minimal',
-    });
-
-    expect(mockedExecuteCommand).toHaveBeenCalledWith('codex', [
-      'exec',
-      '--model',
-      'gpt-5.3-codex',
-      '-c',
-      'model_reasoning_effort="minimal"',
-      '--skip-git-repo-check',
-      'Quick task',
-    ]);
-  });
-
-  test('should pass none reasoning effort to CLI', async () => {
-    await handler.execute({
-      prompt: 'Simple task',
-      reasoningEffort: 'none',
-    });
-
-    expect(mockedExecuteCommand).toHaveBeenCalledWith('codex', [
-      'exec',
-      '--model',
-      'gpt-5.3-codex',
-      '-c',
-      'model_reasoning_effort="none"',
-      '--skip-git-repo-check',
-      'Simple task',
-    ]);
-  });
-
-  test('should pass xhigh reasoning effort to CLI', async () => {
-    await handler.execute({
-      prompt: 'Complex task',
-      reasoningEffort: 'xhigh',
-    });
-
-    expect(mockedExecuteCommand).toHaveBeenCalledWith('codex', [
-      'exec',
-      '--model',
-      'gpt-5.3-codex',
-      '-c',
-      'model_reasoning_effort="xhigh"',
-      '--skip-git-repo-check',
-      'Complex task',
-    ]);
+    const args = getCallArgs();
+    const modelIndex = args.indexOf('--model');
+    expect(args[modelIndex + 1]).toBe('custom-model');
   });
 });

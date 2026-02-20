@@ -1,5 +1,8 @@
-import { CodexToolHandler, ReviewToolHandler } from '../tools/handlers.js';
-import { InMemorySessionStorage } from '../session/storage.js';
+import {
+  AskToolHandler,
+  SuggestToolHandler,
+  ExplainToolHandler,
+} from '../tools/handlers.js';
 import { executeCommand } from '../utils/command.js';
 import { ToolExecutionError, ValidationError } from '../errors.js';
 
@@ -8,159 +11,67 @@ jest.mock('../utils/command.js', () => ({
   executeCommand: jest.fn(),
 }));
 
-const mockedExecuteCommand = executeCommand as jest.MockedFunction<
-  typeof executeCommand
->;
+jest.mock('chalk', () => ({
+  default: {
+    blue: (text: string) => text,
+    yellow: (text: string) => text,
+    green: (text: string) => text,
+    red: (text: string) => text,
+  },
+}));
+
+const mockedExecuteCommand = executeCommand as jest.MockedFunction<typeof executeCommand>;
 
 describe('Error Handling Scenarios', () => {
-  let handler: CodexToolHandler;
-  let sessionStorage: InMemorySessionStorage;
-
   beforeEach(() => {
-    sessionStorage = new InMemorySessionStorage();
-    handler = new CodexToolHandler(sessionStorage);
     mockedExecuteCommand.mockClear();
   });
 
-  test('should handle codex CLI authentication errors', async () => {
-    mockedExecuteCommand.mockRejectedValue(
-      new Error('Authentication failed: Please run `codex login`')
-    );
-
-    await expect(handler.execute({ prompt: 'Test prompt' })).rejects.toThrow(
-      ToolExecutionError
-    );
+  test('AskToolHandler rejects with ToolExecutionError when executeCommand rejects', async () => {
+    mockedExecuteCommand.mockRejectedValue(new Error('command failed with exit code 1'));
+    const handler = new AskToolHandler();
+    await expect(handler.execute({ prompt: 'Test prompt' })).rejects.toThrow(ToolExecutionError);
   });
 
-  test('should handle codex CLI not found errors', async () => {
-    mockedExecuteCommand.mockRejectedValue(
-      new Error('command not found: codex')
-    );
-
-    await expect(handler.execute({ prompt: 'Test prompt' })).rejects.toThrow(
-      ToolExecutionError
-    );
+  test('SuggestToolHandler rejects with ToolExecutionError on command failure', async () => {
+    mockedExecuteCommand.mockRejectedValue(new Error('copilot not found'));
+    const handler = new SuggestToolHandler();
+    await expect(handler.execute({ prompt: 'list files' })).rejects.toThrow(ToolExecutionError);
   });
 
-  test('should handle invalid model parameters', async () => {
-    mockedExecuteCommand.mockRejectedValue(
-      new Error('Invalid model: invalid-model')
-    );
+  test('ExplainToolHandler rejects with ToolExecutionError on command failure', async () => {
+    mockedExecuteCommand.mockRejectedValue(new Error('copilot not found'));
+    const handler = new ExplainToolHandler();
+    await expect(handler.execute({ command: 'ls -la' })).rejects.toThrow(ToolExecutionError);
+  });
 
+  test('AskToolHandler rejects with ValidationError when addDir contains null byte', async () => {
+    const handler = new AskToolHandler();
     await expect(
-      handler.execute({
-        prompt: 'Test prompt',
-        model: 'invalid-model',
-      })
-    ).rejects.toThrow(ToolExecutionError);
-  });
-
-  test('should handle codex CLI timeout errors', async () => {
-    mockedExecuteCommand.mockRejectedValue(
-      new Error('Timeout: Command took too long to execute')
-    );
-
-    await expect(
-      handler.execute({ prompt: 'Complex analysis task' })
-    ).rejects.toThrow(ToolExecutionError);
-  });
-
-  test('should handle network errors during codex execution', async () => {
-    mockedExecuteCommand.mockRejectedValue(
-      new Error('Network error: Unable to reach OpenAI API')
-    );
-
-    await expect(handler.execute({ prompt: 'Test prompt' })).rejects.toThrow(
-      ToolExecutionError
-    );
-  });
-
-  test('should handle invalid session IDs gracefully', async () => {
-    // Non-existent session ID should not crash
-    mockedExecuteCommand.mockResolvedValue({ stdout: 'Response', stderr: '' });
-
-    const result = await handler.execute({
-      prompt: 'Test prompt',
-      sessionId: 'non-existent-session-id',
-    });
-
-    expect(result.content[0].text).toBe('Response');
-  });
-
-  test('should reject review prompt with uncommitted', async () => {
-    const reviewHandler = new ReviewToolHandler();
-
-    await expect(
-      reviewHandler.execute({
-        prompt: 'Review instructions',
-        uncommitted: true,
-      })
+      handler.execute({ prompt: 'test', addDir: '/path/\0with-null' })
     ).rejects.toThrow(ValidationError);
-
     expect(mockedExecuteCommand).not.toHaveBeenCalled();
   });
 
-  test('should reject invalid sessionId values', async () => {
+  test('AskToolHandler rejects with ValidationError when addDir contains path traversal', async () => {
+    const handler = new AskToolHandler();
     await expect(
-      handler.execute({
-        prompt: 'Test prompt',
-        sessionId: 'bad id',
-      })
+      handler.execute({ prompt: 'test', addDir: '/path/../traversal' })
     ).rejects.toThrow(ValidationError);
-
     expect(mockedExecuteCommand).not.toHaveBeenCalled();
   });
 
-  test('should handle corrupted session data', async () => {
-    const sessionId = sessionStorage.createSession();
-
-    // Manually corrupt session data
-    const session = sessionStorage.getSession(sessionId);
-    if (session) {
-      (session.turns as unknown) = null; // Corrupt the turns array
-    }
-
-    mockedExecuteCommand.mockResolvedValue({ stdout: 'Response', stderr: '' });
-
-    // Should not crash, should handle gracefully
-    const result = await handler.execute({
-      prompt: 'Test prompt',
-      sessionId,
-    });
-
-    expect(result.content[0].text).toBe('Response');
-  });
-
-  test('should handle malformed resume conversation IDs', async () => {
-    const sessionId = sessionStorage.createSession();
-    sessionStorage.setCodexConversationId(sessionId, 'invalid-conv-id-format');
-
-    mockedExecuteCommand.mockRejectedValue(
-      new Error('Invalid conversation ID format')
-    );
-
+  test('AskToolHandler rejects with ValidationError when addDir is not absolute', async () => {
+    const handler = new AskToolHandler();
     await expect(
-      handler.execute({
-        prompt: 'Resume test',
-        sessionId,
-      })
-    ).rejects.toThrow(ToolExecutionError);
+      handler.execute({ prompt: 'test', addDir: 'relative/path' })
+    ).rejects.toThrow(ValidationError);
+    expect(mockedExecuteCommand).not.toHaveBeenCalled();
   });
 
-  test('should handle very long prompts', async () => {
-    const longPrompt = 'A'.repeat(100000); // 100k character prompt
-
-    mockedExecuteCommand.mockResolvedValue({ stdout: 'Response', stderr: '' });
-
-    const result = await handler.execute({ prompt: longPrompt });
-
-    expect(result.content[0].text).toBe('Response');
-    expect(mockedExecuteCommand).toHaveBeenCalledWith('codex', [
-      'exec',
-      '--model',
-      'gpt-5.3-codex',
-      '--skip-git-repo-check',
-      longPrompt,
-    ]);
+  test('AskToolHandler throws ToolExecutionError when stdout empty and stderr non-empty', async () => {
+    mockedExecuteCommand.mockResolvedValue({ stdout: '', stderr: 'quota error' });
+    const handler = new AskToolHandler();
+    await expect(handler.execute({ prompt: 'test' })).rejects.toThrow(ToolExecutionError);
   });
 });

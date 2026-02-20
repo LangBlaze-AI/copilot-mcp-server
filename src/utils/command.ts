@@ -31,10 +31,29 @@ export interface StreamingCommandOptions {
   envOverride?: ProcessEnv;
 }
 
+export interface ExecuteCommandOptions {
+  /**
+   * When true, only exit code 0 resolves the promise. Non-zero exit codes
+   * will reject with a CommandExecutionError regardless of stdout/stderr output.
+   * When false (default), the existing lenient behavior applies: resolves if
+   * exit code is 0 OR if any stdout/stderr output was produced.
+   */
+  strictExitCode?: boolean;
+}
+
+/**
+ * Execute a command and return its output.
+ *
+ * @param file - The executable to run
+ * @param args - Arguments to pass to the executable
+ * @param envOverride - Optional environment variable overrides
+ * @param options - Optional execution options (e.g. strictExitCode)
+ */
 export async function executeCommand(
   file: string,
   args: string[] = [],
-  envOverride?: ProcessEnv
+  envOverride?: ProcessEnv,
+  options: ExecuteCommandOptions = {}
 ): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
     // Escape args for Windows shell
@@ -84,23 +103,37 @@ export async function executeCommand(
         console.error(chalk.yellow('Command stderr:'), stderr);
       }
 
-      // Accept exit code 0 or if we got stdout/stderr output
-      // Note: codex CLI writes most output to stderr, so we must check both
-      if (code === 0 || stdout || stderr) {
-        if (code !== 0 && (stdout || stderr)) {
-          console.error(
-            chalk.yellow('Command failed but produced output, using output')
+      if (options.strictExitCode) {
+        // Strict mode: only exit code 0 resolves
+        if (code === 0) {
+          resolve({ stdout, stderr });
+        } else {
+          reject(
+            new CommandExecutionError(
+              [file, ...args].join(' '),
+              `Command failed with exit code ${code}: ${stderr || 'no error message'}`,
+              new Error(stderr || 'Unknown error')
+            )
           );
         }
-        resolve({ stdout, stderr });
       } else {
-        reject(
-          new CommandExecutionError(
-            [file, ...args].join(' '),
-            `Command failed with exit code ${code}`,
-            new Error(stderr || 'Unknown error')
-          )
-        );
+        // Lenient mode (default): accept exit code 0 or if we got stdout/stderr output
+        if (code === 0 || stdout || stderr) {
+          if (code !== 0 && (stdout || stderr)) {
+            console.error(
+              chalk.yellow('Command failed but produced output, using output')
+            );
+          }
+          resolve({ stdout, stderr });
+        } else {
+          reject(
+            new CommandExecutionError(
+              [file, ...args].join(' '),
+              `Command failed with exit code ${code}`,
+              new Error(stderr || 'Unknown error')
+            )
+          );
+        }
       }
     });
 

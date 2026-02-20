@@ -87,9 +87,13 @@
 | CLI-04 | Phase 1 | Pending |
 | CLI-05 | Phase 2 | Pending |
 | CLI-06 | Phase 2 | Pending |
+| SEC-01 | Phase 2 | Pending |
+| SEC-02 | Phase 1 | Pending |
+| SEC-03 | Phase 2 | Pending |
 | ERR-01 | Phase 2 | Pending |
 | ERR-02 | Phase 2 | Pending |
 | ERR-03 | Phase 2 | Pending |
+| ERR-04 | Phase 2 | Pending |
 | CLEAN-01 | Phase 1 | Pending |
 | CLEAN-02 | Phase 1 | Pending |
 | CLEAN-03 | Phase 3 | Pending |
@@ -98,16 +102,12 @@
 | TEST-02 | Phase 1 | Pending |
 | TEST-03 | Phase 2 | Pending |
 | TEST-04 | Phase 1 | Pending |
-| SEC-01 | Phase 2 | Pending |
-| SEC-02 | Phase 1 | Pending |
-| SEC-03 | Phase 2 | Pending |
-| ERR-04 | Phase 2 | Pending |
 
 **Coverage:**
 - v1 requirements: 28 total
 - Mapped to phases: 28
-- Unmapped: 0 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-20*
-*Last updated: 2026-02-20 after CONSUL review (Gemini + OpenCode)*
+*Last updated: 2026-02-20 after roadmap creation*

@@ -2,7 +2,7 @@
 
 ## What This Is
 
-An MCP server that wraps the GitHub Copilot CLI (`gh copilot`), allowing coding agents like Claude Code to query GitHub Copilot and get a second perspective. Agents send requests via MCP, the server spawns `gh copilot` subcommands as child processes, and returns the output. It replaces the existing Codex CLI integration entirely.
+An MCP server that wraps the standalone GitHub Copilot CLI (`copilot` binary, not `gh copilot`), allowing coding agents like Claude Code to query GitHub Copilot and get a second perspective. Agents send requests via MCP, the server spawns the `copilot -p` command as a child process with hardcoded safety flags, and returns the stdout response. It replaces the Codex CLI integration entirely with four stateless tools: `ask`, `suggest`, `explain`, `ping`.
 
 ## Core Value
 
@@ -21,17 +21,21 @@ Coding agents can invoke GitHub Copilot's `suggest`, `explain`, and `ask` capabi
 - ✓ Tool definitions exposed via ListToolsRequest — existing
 - ✓ Build pipeline (tsc → dist/), dev mode (tsx), test suite (Jest) — existing
 
+### Validated (Phase 1)
+
+- ✓ Replace Codex CLI invocations with `copilot -p` — Phase 1
+- ✓ Expose `ask`, `suggest`, `explain`, `ping` as MCP tools — Phase 1
+- ✓ Remove session management layer entirely — Phase 1
+- ✓ Update tool definitions, schemas, and names to match Copilot tools — Phase 1
+- ✓ 42 tests pass with copilot stub integration tests — Phase 1
+
 ### Active
 
-- [ ] Replace Codex CLI invocations with `gh copilot` subcommands
-- [ ] Expose `gh copilot suggest` as MCP tool
-- [ ] Expose `gh copilot explain` as MCP tool
-- [ ] Expose `gh copilot ask` as MCP tool
-- [ ] Remove session management layer entirely (Copilot CLI is stateless)
-- [ ] Update auth prerequisites documentation (gh CLI + `gh auth login` instead of `codex login`)
-- [ ] Update tool definitions, schemas, and names to match Copilot tools
-- [ ] Rename project artifacts (package name, server class, README) from Codex to Copilot
-- [ ] Verify all existing tests pass against new implementation
+- [ ] Update auth prerequisites documentation (copilot binary install + GitHub token auth)
+- [ ] Rename project artifacts (package name, README) from Codex to Copilot branding (Phase 3)
+- [ ] Harden failure modes: ENOENT, quota, auth, timeout (Phase 2)
+- [ ] Strip ANSI escape codes from stdout (Phase 2)
+- [ ] Protect auth tokens from leaking in logs/errors (Phase 2)
 
 ### Out of Scope
 
@@ -63,9 +67,13 @@ The existing codebase is a well-structured MCP server for Codex with clear layer
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Replace Codex entirely (not alongside) | Cleaner codebase, avoids dual-maintenance | — Pending |
-| Drop session management | Copilot CLI is stateless; complexity not justified | — Pending |
-| Reuse command execution utility | `executeCommand` / `executeCommandStreaming` are CLI-agnostic | — Pending |
+| Replace Codex entirely (not alongside) | Cleaner codebase, avoids dual-maintenance | ✓ Done — Phase 1 |
+| Drop session management | Copilot CLI is stateless; complexity not justified | ✓ Done — Phase 1 |
+| Reuse command execution utility | `executeCommand` / `executeCommandStreaming` are CLI-agnostic | ✓ Done — Phase 1 |
+| Use `copilot` binary (not `gh copilot`) | `gh copilot` deprecated Oct 2025; standalone binary is the supported path | ✓ Done — Phase 1 |
+| No model enum validation | CLI validates its own models with clear errors; handler validation is maintenance burden | ✓ Done — Phase 1 |
+| strictExitCode: true for copilot calls | Non-zero exit from copilot = real error; Codex lenient behavior was a workaround for codex stderr output | ✓ Done — Phase 1 |
+| stdout primary response (not stderr) | copilot writes responses to stdout (opposite of codex which used stderr) | ✓ Done — Phase 1 |
 
 ---
-*Last updated: 2026-02-20 after initialization*
+*Last updated: 2026-02-20 after Phase 1*

@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Coding agents can invoke GitHub Copilot's ask, suggest, and explain capabilities over MCP with zero friction — Copilot as a tool, not a UI
-**Current focus:** Phase 1 - Core CLI Integration
+**Current focus:** Phase 2 - Error Handling and Resilience
 
 ## Current Position
 
-Phase: 1 of 3 (Core CLI Integration)
-Plan: 3 of 3 in current phase (all plans complete)
-Status: Verifying
-Last activity: 2026-02-20 — Plan 01-03 complete: 42 tests pass, flag verification integration tests done
+Phase: 2 of 3 (Error Handling and Resilience)
+Plan: 0 of 2 in current phase
+Status: Ready to plan
+Last activity: 2026-02-20 — Phase 1 complete (3/3 plans); 42 tests pass; transitioning to Phase 2
 
-Progress: [██████████] 100%
+Progress: [███░░░░░░░] 33%
 
 ## Performance Metrics
 
@@ -40,11 +40,12 @@ Progress: [██████████] 100%
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
+Recent decisions from Phase 1:
 
-- Replace Codex entirely (not alongside): Cleaner codebase, avoids dual-maintenance
-- Drop session management: Copilot CLI is stateless; complexity not justified
-- Reuse command execution utility: `executeCommand` / `executeCommandStreaming` are CLI-agnostic
+- `copilot` binary (not `gh copilot`): gh copilot deprecated Oct 2025; standalone binary is the path
+- stdout primary (not stderr): copilot outputs to stdout — opposite of Codex; fixed with strictExitCode
+- No model enum validation: CLI validates its own models with clear errors
+- PingToolHandler does NOT invoke copilot binary — immediate response only
 
 ### Pending Todos
 
@@ -52,11 +53,12 @@ None yet.
 
 ### Blockers/Concerns
 
-- Auth token validation is unreliable: when `COPILOT_GITHUB_TOKEN` is set to an invalid value, the CLI silently falls through to stored keyring credentials. Mitigation: document auth precedence; rely on first API call to surface real auth errors.
-- Claude/Gemini model interactive activation: some accounts require running the CLI interactively once per model before non-interactive `-p` mode works. Default to `gpt-4.1` and document activation requirement.
+- Auth token validation is unreliable: when `COPILOT_GITHUB_TOKEN` is set to an invalid value, the CLI silently falls through to stored keyring credentials. Phase 2 work item.
+- Claude/Gemini model interactive activation: some accounts require running the CLI interactively once per model before non-interactive `-p` mode works. Document in Phase 3.
+- ANSI codes: --no-color flag is set but user config may re-enable ANSI. Phase 2 must strip ANSI from stdout.
 
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Roadmap written; no plans executed yet
+Stopped at: Phase 1 complete; transitioned to Phase 2 (Ready to plan)
 Resume file: None

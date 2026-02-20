@@ -1,3 +1,16 @@
+const TOKEN_ENV_VARS = ['COPILOT_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN'] as const;
+
+export function scrubTokens(message: string): string {
+  let scrubbed = message;
+  for (const varName of TOKEN_ENV_VARS) {
+    const value = process.env[varName];
+    if (value && value.length > 4) {
+      scrubbed = scrubbed.replaceAll(value, '[REDACTED]');
+    }
+  }
+  return scrubbed;
+}
+
 export class ToolExecutionError extends Error {
   constructor(
     public readonly toolName: string,
@@ -32,7 +45,7 @@ export class ValidationError extends Error {
 
 export function handleError(error: unknown, context: string): string {
   if (error instanceof Error) {
-    return `Error in ${context}: ${error.message}`;
+    return scrubTokens(`Error in ${context}: ${error.message}`);
   }
-  return `Error in ${context}: ${String(error)}`;
+  return scrubTokens(`Error in ${context}: ${String(error)}`);
 }

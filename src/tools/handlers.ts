@@ -1,4 +1,5 @@
 import path from 'path';
+import { stripVTControlCharacters } from 'node:util';
 import {
   TOOLS,
   DEFAULT_COPILOT_MODEL,
@@ -11,7 +12,7 @@ import {
   type ToolHandlerContext,
 } from '../types.js';
 import { executeCommand } from '../utils/command.js';
-import { ToolExecutionError, ValidationError } from '../errors.js';
+import { ToolExecutionError, ValidationError, scrubTokens } from '../errors.js';
 
 // Default no-op context for handlers that don't need progress
 const defaultContext: ToolHandlerContext = {
@@ -26,6 +27,11 @@ const COPILOT_BASE_ARGS = [
   '--no-color',
   '--no-auto-update',
 ] as const;
+
+// Resolve binary path per call to support test env overrides (SEC-03)
+function getCopilotBinary(): string {
+  return process.env['COPILOT_BINARY_PATH'] ?? 'copilot';
+}
 
 // Validate addDir parameter (SEC-02)
 function validateAddDir(addDir: string): void {
@@ -67,13 +73,35 @@ function buildExplainPrompt(command: string): string {
   return `Explain what this command does: ${command}`;
 }
 
+// Classify non-zero exit errors into actionable messages (ERR-02, ERR-03, CLI-05)
+function classifyCommandError(error: unknown): string {
+  if (!(error instanceof Error)) return 'Unknown error executing copilot';
+  const msg = error.message.toLowerCase();
+  if (msg.includes('quota') || msg.includes('402') || msg.includes('rate limit')) {
+    return 'Copilot quota exceeded. Your GitHub Copilot quota has been exhausted. Please wait before retrying.';
+  }
+  if (
+    msg.includes('auth') || msg.includes('401') || msg.includes('unauthorized') ||
+    msg.includes('unauthenticated') || msg.includes('token')
+  ) {
+    return 'Copilot authentication failed. Ensure COPILOT_GITHUB_TOKEN, GH_TOKEN, or GITHUB_TOKEN is set with a valid GitHub token.';
+  }
+  if (msg.includes('enoent') || msg.includes('not found') || msg.includes('not installed')) {
+    return error.message; // Already user-friendly from command.ts ENOENT detection
+  }
+  if (msg.includes('timed out')) {
+    return error.message; // Already user-friendly from command.ts timeout detection
+  }
+  return scrubTokens(error.message); // Generic: scrub tokens, pass through
+}
+
 // Extract response from copilot output — stdout is primary (CLI-04)
 function extractResponse(stdout: string, stderr: string, toolName: string): string {
-  const response = stdout.trim();
-  if (!response && stderr) {
-    throw new ToolExecutionError(toolName, `Copilot error: ${stderr}`);
+  const cleanStdout = stripVTControlCharacters(stdout).trim();
+  if (!cleanStdout && stderr) {
+    throw new ToolExecutionError(toolName, `Copilot error: ${scrubTokens(stderr)}`);
   }
-  return response || 'No response from Copilot';
+  return cleanStdout || 'No response from Copilot';
 }
 
 // Ask tool handler (TOOL-01, CLI-01, CLI-02, CLI-03, CLI-04)
@@ -82,13 +110,13 @@ export class AskToolHandler {
     const { prompt, model, addDir } = AskToolSchema.parse(args);
     const cmdArgs = buildCopilotArgs(prompt, model, addDir);
     try {
-      const result = await executeCommand('copilot', cmdArgs, undefined, { strictExitCode: true });
+      const result = await executeCommand(getCopilotBinary(), cmdArgs, undefined, { strictExitCode: true });
       return {
         content: [{ type: 'text', text: extractResponse(result.stdout, result.stderr, TOOLS.ASK) }],
       };
     } catch (error) {
       if (error instanceof ValidationError) throw error;
-      throw new ToolExecutionError(TOOLS.ASK, 'Failed to execute copilot ask', error);
+      throw new ToolExecutionError(TOOLS.ASK, classifyCommandError(error), error);
     }
   }
 }
@@ -99,13 +127,13 @@ export class SuggestToolHandler {
     const { prompt, target, model, addDir } = SuggestToolSchema.parse(args);
     const cmdArgs = buildCopilotArgs(buildSuggestPrompt(prompt, target), model, addDir);
     try {
-      const result = await executeCommand('copilot', cmdArgs, undefined, { strictExitCode: true });
+      const result = await executeCommand(getCopilotBinary(), cmdArgs, undefined, { strictExitCode: true });
       return {
         content: [{ type: 'text', text: extractResponse(result.stdout, result.stderr, TOOLS.SUGGEST) }],
       };
     } catch (error) {
       if (error instanceof ValidationError) throw error;
-      throw new ToolExecutionError(TOOLS.SUGGEST, 'Failed to execute copilot suggest', error);
+      throw new ToolExecutionError(TOOLS.SUGGEST, classifyCommandError(error), error);
     }
   }
 }
@@ -116,13 +144,13 @@ export class ExplainToolHandler {
     const { command, model, addDir } = ExplainToolSchema.parse(args);
     const cmdArgs = buildCopilotArgs(buildExplainPrompt(command), model, addDir);
     try {
-      const result = await executeCommand('copilot', cmdArgs, undefined, { strictExitCode: true });
+      const result = await executeCommand(getCopilotBinary(), cmdArgs, undefined, { strictExitCode: true });
       return {
         content: [{ type: 'text', text: extractResponse(result.stdout, result.stderr, TOOLS.EXPLAIN) }],
       };
     } catch (error) {
       if (error instanceof ValidationError) throw error;
-      throw new ToolExecutionError(TOOLS.EXPLAIN, 'Failed to execute copilot explain', error);
+      throw new ToolExecutionError(TOOLS.EXPLAIN, classifyCommandError(error), error);
     }
   }
 }

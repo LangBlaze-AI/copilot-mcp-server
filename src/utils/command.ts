@@ -2,7 +2,7 @@ type ProcessEnv = Record<string, string | undefined>;
 import { spawn } from 'child_process';
 import { Buffer } from 'node:buffer';
 import chalk from 'chalk';
-import { CommandExecutionError } from '../errors.js';
+import { CommandExecutionError, scrubTokens } from '../errors.js';
 import { type CommandResult } from '../types.js';
 
 /**
@@ -23,6 +23,8 @@ const isWindows = process.platform === 'win32';
 
 // Maximum buffer size (10MB) to prevent memory exhaustion from noisy processes
 const MAX_BUFFER_SIZE = 10 * 1024 * 1024;
+
+const EXECUTE_TIMEOUT_MS = 60_000; // 60 seconds (ERR-04)
 
 export type ProgressCallback = (message: string) => void;
 
@@ -65,6 +67,8 @@ export async function executeCommand(
       shell: isWindows,
       env: envOverride ? { ...process.env, ...envOverride } : process.env,
       stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: EXECUTE_TIMEOUT_MS,
+      killSignal: 'SIGTERM',
     });
 
     let stdout = '';
@@ -98,9 +102,21 @@ export async function executeCommand(
       }
     });
 
-    child.on('close', (code) => {
+    child.on('close', (code, signal) => {
       if (stderr) {
-        console.error(chalk.yellow('Command stderr:'), stderr);
+        console.error(chalk.yellow('Command stderr:'), scrubTokens(stderr));
+      }
+
+      // Detect timeout: native spawn kills with SIGTERM, close fires with (null, 'SIGTERM')
+      if (code === null && signal === 'SIGTERM') {
+        reject(
+          new CommandExecutionError(
+            [file, ...args].join(' '),
+            `Command timed out after ${EXECUTE_TIMEOUT_MS}ms`,
+            new Error('Timeout')
+          )
+        );
+        return;
       }
 
       if (options.strictExitCode) {
@@ -138,13 +154,26 @@ export async function executeCommand(
     });
 
     child.on('error', (error) => {
-      reject(
-        new CommandExecutionError(
-          [file, ...args].join(' '),
-          'Command execution failed',
-          error
-        )
-      );
+      const nodeError = error as NodeJS.ErrnoException;
+      if (nodeError.code === 'ENOENT') {
+        reject(
+          new CommandExecutionError(
+            file,
+            `Binary not found: "${file}". ` +
+              `If using the default copilot binary, install it from: https://github.com/github/gh-copilot. ` +
+              `If using COPILOT_BINARY_PATH, verify the path is correct.`,
+            error
+          )
+        );
+      } else {
+        reject(
+          new CommandExecutionError(
+            [file, ...args].join(' '),
+            'Command execution failed',
+            error
+          )
+        );
+      }
     });
   });
 }

@@ -58,10 +58,10 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. `package.json` name, server class name (`CopilotMcpServer`), and `README.md` header carry Copilot branding — no remaining Codex references in user-facing artifacts
   2. The README describes `copilot` binary installation, GitHub token auth setup, model selection, and the `--allow-all-tools` security note — replacing all Codex-specific instructions
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 03-01: Update `package.json` package name and server class name in `src/server.ts` and `src/index.ts`; update `README.md` with Copilot prerequisites, auth setup, model parameter docs, and known limitations
+- [ ] 03-01-PLAN.md — Update package.json (name, bin, keywords, remove Codex URLs), rename .mcp.json server key, delete docs/ directory, write full Copilot README
 
 ## Progress
 

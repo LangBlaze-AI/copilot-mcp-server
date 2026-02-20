@@ -1,17 +1,14 @@
 {
-  "name": "codex-mcp-server",
+  "name": "copilot-mcp-server",
   "version": "1.4.0",
-  "description": "MCP server wrapper for OpenAI Codex CLI",
+  "description": "MCP server wrapper for GitHub Copilot CLI",
   "main": "dist/index.js",
   "bin": {
-    "codex-mcp-server": "dist/index.js"
+    "copilot-mcp-server": "dist/index.js"
   },
   "files": [
     "dist"
   ],
-  "directories": {
-    "doc": "docs"
-  },
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
@@ -25,14 +22,10 @@
     "format:check": "prettier --check src/**/*.ts",
     "clean": "rm -rf dist"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/tuannvm/codex-mcp-server.git"
-  },
   "keywords": [
     "mcp",
-    "codex",
-    "openai",
+    "copilot",
+    "github",
     "claude",
     "ai",
     "cli"
@@ -40,10 +33,6 @@
   "author": "",
   "license": "ISC",
   "type": "module",
-  "bugs": {
-    "url": "https://github.com/tuannvm/codex-mcp-server/issues"
-  },
-  "homepage": "https://github.com/tuannvm/codex-mcp-server#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.24.0",
     "chalk": "^5.6.0",

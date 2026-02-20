@@ -1,120 +1,138 @@
-# Codex MCP Server
+# Copilot MCP Server
 
-[![npm version](https://img.shields.io/npm/v/codex-mcp-server.svg)](https://www.npmjs.com/package/codex-mcp-server)
-[![npm downloads](https://img.shields.io/npm/dm/codex-mcp-server.svg)](https://www.npmjs.com/package/codex-mcp-server)
-[![license](https://img.shields.io/npm/l/codex-mcp-server.svg)](https://www.npmjs.com/package/codex-mcp-server)
+An MCP (Model Context Protocol) server that wraps the GitHub Copilot CLI, letting coding agents invoke `ask`, `suggest`, and `explain` capabilities over MCP with zero friction.
 
-Bridge between Claude and OpenAI's Codex CLI — get AI-powered code analysis, generation, and review right in your editor.
+## Prerequisites
 
-```mermaid
-graph LR
-    A[Claude Code] --> B[Codex MCP Server]
-    B --> C[Codex CLI]
-    C --> D[OpenAI API]
+- **GitHub Copilot subscription** (Pro, Pro+, Business, or Enterprise)
+- **Node.js 22+**
 
-    style A fill:#FF6B35
-    style B fill:#4A90E2
-    style C fill:#00D4AA
-    style D fill:#FFA500
+## Install Copilot CLI
+
+**npm (all platforms, requires Node.js 22+):**
+```bash
+npm install -g @github/copilot
 ```
 
-## Quick Start
+**macOS / Linux (Homebrew):**
+```bash
+brew install copilot-cli
+```
 
-### 1. Install Codex CLI
+**Windows (WinGet):**
+```bash
+winget install GitHub.Copilot
+```
+
+**Script (macOS / Linux):**
+```bash
+curl -fsSL https://gh.io/copilot-install | bash
+```
+
+After installing, verify the binary is available:
+```bash
+copilot --version
+```
+
+## Authenticate
+
+**Option A: Environment variable (recommended for MCP servers)**
+
+Set one of the following (highest priority first):
+```bash
+export COPILOT_GITHUB_TOKEN="ghp_your_token_here"  # recommended
+# or
+export GITHUB_TOKEN="ghp_your_token_here"
+# or
+export GH_TOKEN="ghp_your_token_here"
+```
+
+Your GitHub Personal Access Token must have the **Copilot Requests** permission enabled.
+
+**Option B: Interactive login (first-time setup)**
+```bash
+copilot
+# Type: /login
+# Follow the on-screen instructions
+```
+
+## Add to Claude Code
 
 ```bash
-npm i -g @openai/codex
-codex login --api-key "your-openai-api-key"
+claude mcp add copilot-cli -- npx -y copilot-mcp-server
 ```
 
-### 2. Add to Claude Code
-
-```bash
-claude mcp add codex-cli -- npx -y codex-mcp-server
+Or add manually to your MCP config:
+```json
+{
+  "mcpServers": {
+    "copilot-cli": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "copilot-mcp-server"]
+    }
+  }
+}
 ```
-
-### 3. Start Using
-
-```
-Ask codex to explain this function
-Use codex to refactor this code for better performance
-Use review to check my uncommitted changes
-```
-
-## One-Click Install
-
-[![VS Code](https://img.shields.io/badge/VS_Code-Install-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=codex-cli&config=%7B%22type%22%3A%22stdio%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22codex-mcp-server%22%5D%7D)
-[![VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Install-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=codex-cli&config=%7B%22type%22%3A%22stdio%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22codex-mcp-server%22%5D%7D)
-[![Cursor](https://img.shields.io/badge/Cursor-Install-00D8FF?style=flat-square&logo=cursor&logoColor=white)](https://cursor.com/en/install-mcp?name=codex&config=eyJ0eXBlIjoic3RkaW8iLCJjb21tYW5kIjoibnB4IC15IGNvZGV4LW1jcC1zZXJ2ZXIiLCJlbnYiOnt9fQ%3D%3D)
 
 ## Tools
 
-| Tool | Description |
-|------|-------------|
-| `codex` | AI coding assistant with session support, model selection, and structured output metadata |
-| `review` | AI-powered code review for uncommitted changes, branches, or commits |
-| `listSessions` | View active conversation sessions |
-| `ping` | Test server connection |
-| `help` | Get Codex CLI help |
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `ask` | Ask a natural language question and receive a Copilot agent response | `prompt` (required), `model` (optional), `addDir` (optional) |
+| `suggest` | Get a command suggestion for a task description | `prompt` (required), `target` (`shell`\|`git`\|`gh`, optional), `model` (optional), `addDir` (optional) |
+| `explain` | Get a plain-language explanation of a shell command | `command` (required), `model` (optional), `addDir` (optional) |
+| `ping` | Verify the MCP server is running | none |
 
-## Examples
+## Model Selection
 
-**Code analysis:**
-```
-Use codex to analyze this authentication logic for security issues
-```
+Pass the `model` parameter to `ask`, `suggest`, or `explain`:
 
-**Multi-turn conversations:**
 ```
-Use codex with sessionId "refactor" to analyze this module
-Use codex with sessionId "refactor" to implement your suggestions
-```
-Passing a sessionId creates the session on first use, so listSessions will show
-it (for this server instance) and subsequent calls can resume context.
-
-**Code review:**
-```
-Use review with base "main" to check my PR changes
-Use review with uncommitted true to review my local changes
+Use ask with model "gpt-4o" to analyze this function
+Use ask with model "claude-sonnet-4-5" to refactor this module
 ```
 
-**Advanced options:**
+**Default model:** `gpt-4.1`
+
+**Available models include:** `gpt-4.1`, `gpt-4o`, `claude-sonnet-4-5`, `claude-opus-4-5`, `gemini-2.0-flash`, and others accepted by the Copilot CLI.
+
+> **Note:** Claude and Gemini models may require prior interactive activation. Run `copilot` interactively, select the model via `/model`, and confirm it works before using it via the MCP server. The default model `gpt-4.1` works immediately without activation.
+
+## Additional Directories
+
+Pass the `addDir` parameter to expose additional filesystem paths to the Copilot agent:
+
 ```
-Use codex with model "o3" and reasoningEffort "high" for complex analysis
-Use codex with fullAuto true and sandbox "workspace-write" for automated tasks
-Use codex with callbackUri "http://localhost:1234/callback" for static callbacks
-Use codex to return structuredContent with threadId metadata when available
+Use ask with addDir "/path/to/project" to answer questions about that project
 ```
 
-## Requirements
+## Security Note: --allow-all-tools
 
-- **Codex CLI v0.75.0+** — Install with `npm i -g @openai/codex` or `brew install codex`
-- **OpenAI API key** — Run `codex login --api-key "your-key"` to authenticate
-
-## Codex 0.87 Compatibility
-- **Thread ID + structured output**: When Codex CLI emits `threadId`, this server returns it in content metadata and `structuredContent`, and advertises an `outputSchema` for structured responses.
-
-## Documentation
-
-- **[API Reference](docs/api-reference.md)** — Full tool parameters and response formats
-- **[Session Management](docs/session-management.md)** — How conversations work
-- **[Codex CLI Integration](docs/codex-cli-integration.md)** — Version compatibility and CLI details
+This server passes `--allow-all-tools` to every Copilot invocation. This flag permits the Copilot agent to execute shell commands, read files, and make network requests on your behalf. Only use this server in trusted environments and with prompts you control.
 
 ## Environment Variables
-- `CODEX_MCP_CALLBACK_URI`: Static MCP callback URI passed to Codex when set (overridden by `callbackUri` tool arg)
+
+| Variable | Description |
+|----------|-------------|
+| `COPILOT_GITHUB_TOKEN` | GitHub PAT for authentication (highest priority, requires Copilot Requests permission) |
+| `GITHUB_TOKEN` | GitHub token fallback |
+| `GH_TOKEN` | GitHub token fallback (used by gh CLI) |
+| `COPILOT_BINARY_PATH` | Override the default `copilot` binary location (for non-PATH installs) |
+
+## Known Limitations
+
+- **Interactive activation required for some models:** Claude and Gemini model families must be activated interactively (via `copilot` TUI) before they work reliably in non-interactive `-p` mode.
+- **Auth token fallback behavior:** When `COPILOT_GITHUB_TOKEN` is set to an invalid value, the CLI may silently fall through to stored keyring credentials rather than failing immediately. Verify authentication by running `copilot` interactively if unexpected behavior occurs.
+- **`--allow-all-tools` is hardcoded:** The security flag cannot be disabled from the MCP interface. See Security Note above.
 
 ## Development
 
 ```bash
-npm install    # Install dependencies
-npm run dev    # Development mode
-npm run build  # Build for production
-npm test       # Run tests
+npm install
+npm run build
+npm test
 ```
-
-## Related Projects
-
-- **[gemini-mcp-server](https://github.com/tuannvm/gemini-mcp-server)** — MCP server for Gemini CLI with 1M+ token context, web search, and media analysis
 
 ## License
 

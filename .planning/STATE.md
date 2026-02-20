@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Coding agents can invoke GitHub Copilot's ask, suggest, and explain capabilities over MCP with zero friction — Copilot as a tool, not a UI
-**Current focus:** Phase 2 - Error Handling and Resilience
+**Current focus:** Phase 3 complete — project finished
 
 ## Current Position
 
-Phase: 2 of 3 (Error Handling and Resilience)
-Plan: 0 of 2 in current phase
-Status: Ready to plan
-Last activity: 2026-02-20 — Phase 1 complete (3/3 plans); 42 tests pass; transitioning to Phase 2
+Phase: 3 of 3 (Branding and Documentation)
+Plan: 1 of 1 in current phase
+Status: Complete
+Last activity: 2026-02-20 — Phase 3 complete (1/1 plans); all 3 phases done; 51 tests pass
 
-Progress: [███░░░░░░░] 33%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
+- Total plans completed: 3 (across all phases)
 - Average duration: -
 - Total execution time: 0 hours
 
@@ -27,7 +27,8 @@ Progress: [███░░░░░░░] 33%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| Phase 2 | 2 | - | - |
+| Phase 3 | 1 | - | - |
 
 **Recent Trend:**
 - Last 5 plans: -
@@ -47,18 +48,31 @@ Recent decisions from Phase 1:
 - No model enum validation: CLI validates its own models with clear errors
 - PingToolHandler does NOT invoke copilot binary — immediate response only
 
+Recent decisions from Phase 2:
+
+- `getCopilotBinary()` per-call (not module const): enables test overrides of COPILOT_BINARY_PATH
+- ANSI stripped before token scrubbing: prevents ANSI sequences corrupting token value matching
+- `value.length > 4` guard in scrubTokens: prevents empty/short env vars from matching partial words
+- SIGTERM detection via `(code === null && signal === 'SIGTERM')`: native spawn timeout pattern
+
+Recent decisions from Phase 3:
+
+- Remove repository/bugs/homepage from package.json: URLs pointed to wrong project (tuannvm/codex-mcp-server); removing safer than leaving incorrect
+- Delete docs/ entirely: five Codex-era files with no salvageable content for Copilot integration
+- Full README rewrite rather than patch: avoids hidden Codex references in unchanged sections
+
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
-- Auth token validation is unreliable: when `COPILOT_GITHUB_TOKEN` is set to an invalid value, the CLI silently falls through to stored keyring credentials. Phase 2 work item.
-- Claude/Gemini model interactive activation: some accounts require running the CLI interactively once per model before non-interactive `-p` mode works. Document in Phase 3.
-- ANSI codes: --no-color flag is set but user config may re-enable ANSI. Phase 2 must strip ANSI from stdout.
+- Auth token validation is unreliable: when `COPILOT_GITHUB_TOKEN` is set to an invalid value, the CLI silently falls through to stored keyring credentials. Documented in README Known Limitations; Phase 2 scrubbing is a mitigation not a fix.
+- Claude/Gemini model interactive activation: some accounts require running the CLI interactively once per model before non-interactive `-p` mode works. Documented in README Model Selection section.
+- Version inconsistency (pre-existing, not in scope): package.json version is 1.4.0 but src/index.ts SERVER_CONFIG.version is 0.0.6. Not synced during migration; left for post-project resolution.
 
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Phase 1 complete; transitioned to Phase 2 (Ready to plan)
+Stopped at: Phase 3 complete; all 3 phases done; project finished
 Resume file: None

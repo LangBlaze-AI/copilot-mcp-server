@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "codex-cli": {
+    "copilot-cli": {
       "type": "stdio",
       "command": "node",
       "args": [

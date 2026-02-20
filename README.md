@@ -90,12 +90,12 @@ Pass the `model` parameter to `ask`, `suggest`, or `explain`:
 
 ```
 Use ask with model "gpt-4o" to analyze this function
-Use ask with model "claude-sonnet-4-5" to refactor this module
+Use ask with model "claude-sonnet-4-6" to refactor this module
 ```
 
 **Default model:** `gpt-4.1`
 
-**Available models include:** `gpt-4.1`, `gpt-4o`, `claude-sonnet-4-5`, `claude-opus-4-5`, `gemini-2.0-flash`, and others accepted by the Copilot CLI.
+**Available models include:** `gpt-4.1`, `gpt-4o`, `claude-sonnet-4-6`, `claude-opus-4-6`, `gemini-2.0-flash`, and others accepted by the Copilot CLI.
 
 > **Note:** Claude and Gemini models may require prior interactive activation. Run `copilot` interactively, select the model via `/model`, and confirm it works before using it via the MCP server. The default model `gpt-4.1` works immediately without activation.
 
@@ -119,6 +119,7 @@ This server passes `--allow-all-tools` to every Copilot invocation. This flag pe
 | `GITHUB_TOKEN` | GitHub token fallback |
 | `GH_TOKEN` | GitHub token fallback (used by gh CLI) |
 | `COPILOT_BINARY_PATH` | Override the default `copilot` binary location (for non-PATH installs) |
+| `COPILOT_DEFAULT_MODEL` | Override the default model used when `model` is not passed to a tool (default: `gpt-4.1`) |
 
 ## Known Limitations
 

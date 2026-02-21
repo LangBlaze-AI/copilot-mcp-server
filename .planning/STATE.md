@@ -70,6 +70,7 @@ None.
 | # | Description | Date | Commit | Status | Directory |
 |---|-------------|------|--------|--------|-----------|
 | 1 | review the readme | 2026-02-20 | 8939415 | Verified | [1-review-the-readme](./quick/1-review-the-readme/) |
+| 2 | hybrid soft timeout for Copilot tools | 2026-02-21 | 91c97fa | Verified | (inline - no plan dir) |
 
 ### Blockers/Concerns
 

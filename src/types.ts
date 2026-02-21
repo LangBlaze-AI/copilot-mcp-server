@@ -63,6 +63,7 @@ export const AskToolSchema = z.object({
   prompt: z.string(),
   model: z.string().optional(),
   addDir: z.string().optional(),
+  softTimeoutMs: z.number().int().positive().optional(),
 });
 export type AskToolArgs = z.infer<typeof AskToolSchema>;
 
@@ -71,6 +72,7 @@ export const SuggestToolSchema = z.object({
   target: z.enum(['shell', 'git', 'gh']).optional(),
   model: z.string().optional(),
   addDir: z.string().optional(),
+  softTimeoutMs: z.number().int().positive().optional(),
 });
 export type SuggestToolArgs = z.infer<typeof SuggestToolSchema>;
 
@@ -78,6 +80,7 @@ export const ExplainToolSchema = z.object({
   command: z.string(),
   model: z.string().optional(),
   addDir: z.string().optional(),
+  softTimeoutMs: z.number().int().positive().optional(),
 });
 export type ExplainToolArgs = z.infer<typeof ExplainToolSchema>;
 

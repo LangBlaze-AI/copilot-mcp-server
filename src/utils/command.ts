@@ -41,6 +41,14 @@ export interface ExecuteCommandOptions {
    * exit code is 0 OR if any stdout/stderr output was produced.
    */
   strictExitCode?: boolean;
+  /**
+   * Soft timeout in milliseconds. When set (and less than the hard timeout),
+   * fires SIGTERM → 5s → SIGKILL and resolves early with whatever stdout was
+   * accumulated, prefixed with '[Soft timeout - partial output]\n', instead of
+   * blocking until the hard timeout and rejecting. The LLM is also informed of
+   * the time budget via a prompt prefix so it can self-regulate.
+   */
+  softTimeoutMs?: number;
 }
 
 /**
@@ -67,14 +75,52 @@ export async function executeCommand(
       shell: isWindows,
       env: envOverride ? { ...process.env, ...envOverride } : process.env,
       stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: EXECUTE_TIMEOUT_MS,
-      killSignal: 'SIGTERM',
     });
 
     let stdout = '';
     let stderr = '';
     let stdoutTruncated = false;
     let stderrTruncated = false;
+    let isResolved = false;
+
+    // Kill with SIGTERM first, then escalate to SIGKILL after 5s if still running
+    function killProcess(): void {
+      child.kill('SIGTERM');
+      setTimeout(() => {
+        try { child.kill('SIGKILL'); } catch { /* already dead */ }
+      }, 5000);
+    }
+
+    // Soft timeout: resolves early with whatever output was accumulated
+    let softTimeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    let hardTimeoutHandle: ReturnType<typeof setTimeout> | undefined;
+
+    if (options.softTimeoutMs !== undefined && options.softTimeoutMs < EXECUTE_TIMEOUT_MS) {
+      softTimeoutHandle = setTimeout(() => {
+        if (!isResolved) {
+          isResolved = true;
+          clearTimeout(hardTimeoutHandle);
+          killProcess();
+          resolve({ stdout: '[Soft timeout - partial output]\n' + stdout, stderr });
+        }
+      }, options.softTimeoutMs);
+    }
+
+    // Hard timeout: rejects (manual, replacing native spawn timeout option)
+    hardTimeoutHandle = setTimeout(() => {
+      if (!isResolved) {
+        isResolved = true;
+        clearTimeout(softTimeoutHandle);
+        killProcess();
+        reject(
+          new CommandExecutionError(
+            [file, ...args].join(' '),
+            `Command timed out after ${EXECUTE_TIMEOUT_MS}ms`,
+            new Error('Timeout')
+          )
+        );
+      }
+    }, EXECUTE_TIMEOUT_MS);
 
     child.stdout.on('data', (data: Buffer) => {
       if (!stdoutTruncated) {
@@ -103,11 +149,16 @@ export async function executeCommand(
     });
 
     child.on('close', (code, signal) => {
+      if (isResolved) return; // already handled by soft or hard timeout
+      isResolved = true;
+      clearTimeout(hardTimeoutHandle);
+      clearTimeout(softTimeoutHandle);
+
       if (stderr) {
         console.error(chalk.yellow('Command stderr:'), scrubTokens(stderr));
       }
 
-      // Detect timeout: native spawn kills with SIGTERM, close fires with (null, 'SIGTERM')
+      // Detect unexpected external SIGTERM (not from our own killProcess)
       if (code === null && signal === 'SIGTERM') {
         reject(
           new CommandExecutionError(
@@ -154,6 +205,10 @@ export async function executeCommand(
     });
 
     child.on('error', (error) => {
+      if (isResolved) return;
+      isResolved = true;
+      clearTimeout(hardTimeoutHandle);
+      clearTimeout(softTimeoutHandle);
       const nodeError = error as NodeJS.ErrnoException;
       if (nodeError.code === 'ENOENT') {
         reject(

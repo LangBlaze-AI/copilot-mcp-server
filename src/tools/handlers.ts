@@ -104,13 +104,20 @@ function extractResponse(stdout: string, stderr: string, toolName: string): stri
   return cleanStdout || 'No response from Copilot';
 }
 
+// Build time budget prefix for soft timeout prompt injection
+function buildTimeBudgetPrefix(softTimeoutMs: number): string {
+  const minutes = Math.round(softTimeoutMs / 60000);
+  return `[Time budget: ${minutes}m. Summarize what you have if running long — complete answer over exhaustive research.]\n\n`;
+}
+
 // Ask tool handler (TOOL-01, CLI-01, CLI-02, CLI-03, CLI-04)
 export class AskToolHandler {
   async execute(args: unknown, context: ToolHandlerContext = defaultContext): Promise<ToolResult> {
-    const { prompt, model, addDir } = AskToolSchema.parse(args);
-    const cmdArgs = buildCopilotArgs(prompt, model, addDir);
+    const { prompt, model, addDir, softTimeoutMs } = AskToolSchema.parse(args);
+    const finalPrompt = softTimeoutMs ? buildTimeBudgetPrefix(softTimeoutMs) + prompt : prompt;
+    const cmdArgs = buildCopilotArgs(finalPrompt, model, addDir);
     try {
-      const result = await executeCommand(getCopilotBinary(), cmdArgs, undefined, { strictExitCode: true });
+      const result = await executeCommand(getCopilotBinary(), cmdArgs, undefined, { strictExitCode: true, softTimeoutMs });
       return {
         content: [{ type: 'text', text: extractResponse(result.stdout, result.stderr, TOOLS.ASK) }],
       };
@@ -124,10 +131,12 @@ export class AskToolHandler {
 // Suggest tool handler (TOOL-02, TOOL-03)
 export class SuggestToolHandler {
   async execute(args: unknown, context: ToolHandlerContext = defaultContext): Promise<ToolResult> {
-    const { prompt, target, model, addDir } = SuggestToolSchema.parse(args);
-    const cmdArgs = buildCopilotArgs(buildSuggestPrompt(prompt, target), model, addDir);
+    const { prompt, target, model, addDir, softTimeoutMs } = SuggestToolSchema.parse(args);
+    const basePrompt = buildSuggestPrompt(prompt, target);
+    const finalPrompt = softTimeoutMs ? buildTimeBudgetPrefix(softTimeoutMs) + basePrompt : basePrompt;
+    const cmdArgs = buildCopilotArgs(finalPrompt, model, addDir);
     try {
-      const result = await executeCommand(getCopilotBinary(), cmdArgs, undefined, { strictExitCode: true });
+      const result = await executeCommand(getCopilotBinary(), cmdArgs, undefined, { strictExitCode: true, softTimeoutMs });
       return {
         content: [{ type: 'text', text: extractResponse(result.stdout, result.stderr, TOOLS.SUGGEST) }],
       };
@@ -141,10 +150,12 @@ export class SuggestToolHandler {
 // Explain tool handler (TOOL-04)
 export class ExplainToolHandler {
   async execute(args: unknown, context: ToolHandlerContext = defaultContext): Promise<ToolResult> {
-    const { command, model, addDir } = ExplainToolSchema.parse(args);
-    const cmdArgs = buildCopilotArgs(buildExplainPrompt(command), model, addDir);
+    const { command, model, addDir, softTimeoutMs } = ExplainToolSchema.parse(args);
+    const basePrompt = buildExplainPrompt(command);
+    const finalPrompt = softTimeoutMs ? buildTimeBudgetPrefix(softTimeoutMs) + basePrompt : basePrompt;
+    const cmdArgs = buildCopilotArgs(finalPrompt, model, addDir);
     try {
-      const result = await executeCommand(getCopilotBinary(), cmdArgs, undefined, { strictExitCode: true });
+      const result = await executeCommand(getCopilotBinary(), cmdArgs, undefined, { strictExitCode: true, softTimeoutMs });
       return {
         content: [{ type: 'text', text: extractResponse(result.stdout, result.stderr, TOOLS.EXPLAIN) }],
       };

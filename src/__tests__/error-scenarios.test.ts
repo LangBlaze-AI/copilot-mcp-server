@@ -219,3 +219,96 @@ describe('Phase 2: Hardened Error Handling', () => {
     }
   });
 });
+
+describe('Hybrid Soft Timeout', () => {
+  beforeEach(() => {
+    mockedExecuteCommand.mockClear();
+  });
+
+  // Soft timeout resolves (does not throw) with partial output prefix
+  test('AskToolHandler: soft timeout resolves with partial output prefix', async () => {
+    mockedExecuteCommand.mockResolvedValue({
+      stdout: '[Soft timeout - partial output]\nPartial Copilot response',
+      stderr: '',
+    });
+    const handler = new AskToolHandler();
+    const result = await handler.execute({ prompt: 'test', softTimeoutMs: 5000 });
+    const text = result.content[0].type === 'text' ? result.content[0].text : '';
+    expect(text).toContain('[Soft timeout - partial output]');
+    expect(text).toContain('Partial Copilot response');
+  });
+
+  // Soft timeout with no output yet still resolves (not rejects)
+  test('AskToolHandler: soft timeout with empty stdout resolves to prefix only', async () => {
+    mockedExecuteCommand.mockResolvedValue({
+      stdout: '[Soft timeout - partial output]\n',
+      stderr: '',
+    });
+    const handler = new AskToolHandler();
+    const result = await handler.execute({ prompt: 'test', softTimeoutMs: 1000 });
+    const text = result.content[0].type === 'text' ? result.content[0].text : '';
+    expect(text).toContain('[Soft timeout - partial output]');
+    expect(result.content[0]).not.toHaveProperty('isError');
+  });
+
+  // softTimeoutMs is forwarded to executeCommand
+  test('AskToolHandler: passes softTimeoutMs to executeCommand', async () => {
+    mockedExecuteCommand.mockResolvedValue({ stdout: 'response', stderr: '' });
+    const handler = new AskToolHandler();
+    await handler.execute({ prompt: 'hello', softTimeoutMs: 30000 });
+    expect(mockedExecuteCommand).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      undefined,
+      expect.objectContaining({ softTimeoutMs: 30000 })
+    );
+  });
+
+  // Time budget prefix is injected into the prompt when softTimeoutMs is set
+  test('AskToolHandler: injects time budget prefix into prompt when softTimeoutMs is set', async () => {
+    mockedExecuteCommand.mockResolvedValue({ stdout: 'response', stderr: '' });
+    const handler = new AskToolHandler();
+    await handler.execute({ prompt: 'my question', softTimeoutMs: 1800000 });
+    const calledArgs = mockedExecuteCommand.mock.calls[0][1] as string[];
+    const promptArg = calledArgs[calledArgs.indexOf('-p') + 1];
+    expect(promptArg).toContain('[Time budget: 30m.');
+    expect(promptArg).toContain('my question');
+  });
+
+  // Without softTimeoutMs, no time budget prefix is injected
+  test('AskToolHandler: no time budget prefix when softTimeoutMs is absent', async () => {
+    mockedExecuteCommand.mockResolvedValue({ stdout: 'response', stderr: '' });
+    const handler = new AskToolHandler();
+    await handler.execute({ prompt: 'my question' });
+    const calledArgs = mockedExecuteCommand.mock.calls[0][1] as string[];
+    const promptArg = calledArgs[calledArgs.indexOf('-p') + 1];
+    expect(promptArg).not.toContain('[Time budget:');
+    expect(promptArg).toBe('my question');
+  });
+
+  // SuggestToolHandler also supports softTimeoutMs
+  test('SuggestToolHandler: passes softTimeoutMs to executeCommand', async () => {
+    mockedExecuteCommand.mockResolvedValue({ stdout: 'ls -la', stderr: '' });
+    const handler = new SuggestToolHandler();
+    await handler.execute({ prompt: 'list files', softTimeoutMs: 10000 });
+    expect(mockedExecuteCommand).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      undefined,
+      expect.objectContaining({ softTimeoutMs: 10000 })
+    );
+  });
+
+  // ExplainToolHandler also supports softTimeoutMs
+  test('ExplainToolHandler: passes softTimeoutMs to executeCommand', async () => {
+    mockedExecuteCommand.mockResolvedValue({ stdout: 'Lists files', stderr: '' });
+    const handler = new ExplainToolHandler();
+    await handler.execute({ command: 'ls -la', softTimeoutMs: 10000 });
+    expect(mockedExecuteCommand).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      undefined,
+      expect.objectContaining({ softTimeoutMs: 10000 })
+    );
+  });
+});

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { UnifiedTool, ToolArguments } from './registry.js';
-import { TOOLS, PingToolSchema, DEFAULT_COPILOT_MODEL, COPILOT_DEFAULT_MODEL_ENV_VAR } from '../types.js';
+import { TOOLS, PingToolSchema, DEFAULT_COPILOT_MODEL, COPILOT_DEFAULT_MODEL_ENV_VAR, AVAILABLE_COPILOT_MODELS } from '../types.js';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -13,6 +13,14 @@ function loadPackageVersion(): string {
   } catch {
     return '0.0.0';
   }
+}
+
+function detectInstallMethod(): string {
+  const argv1 = process.argv[1] ?? '';
+  if (argv1.includes('node_modules')) return 'npm';
+  if (argv1.includes('homebrew') || argv1.includes('/opt/homebrew')) return 'brew';
+  if (process.env['npm_config_prefix']) return 'npm';
+  return 'unknown';
 }
 
 const pkgVersion = loadPackageVersion();
@@ -53,10 +61,11 @@ export const identityTool: UnifiedTool = {
   category: 'simple',
   execute: async (_args: ToolArguments): Promise<string> => {
     return JSON.stringify({
-      server: 'Copilot MCP Server',
-      version: pkgVersion,
-      mcp_server_name: 'copilot-cli',
-      llm: process.env[COPILOT_DEFAULT_MODEL_ENV_VAR] ?? DEFAULT_COPILOT_MODEL,
+      name: 'copilot-mcp-server',
+      version: loadPackageVersion(),
+      model: process.env[COPILOT_DEFAULT_MODEL_ENV_VAR] ?? DEFAULT_COPILOT_MODEL,
+      available_models: AVAILABLE_COPILOT_MODELS,
+      install_method: detectInstallMethod(),
     }, null, 2);
   },
 };

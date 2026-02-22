@@ -15,6 +15,14 @@ export type ToolName = (typeof TOOLS)[keyof typeof TOOLS];
 export const DEFAULT_COPILOT_MODEL = 'gpt-4.1' as const;
 export const COPILOT_DEFAULT_MODEL_ENV_VAR = 'COPILOT_DEFAULT_MODEL' as const;
 
+// Available model options (for documentation/reference)
+export const AVAILABLE_COPILOT_MODELS = [
+  'gpt-4.1',
+  'gpt-4o',
+  'claude-3.5-sonnet',
+  'o3-mini',
+] as const;
+
 // Tool annotations for MCP 2025-11-25 spec
 export interface ToolAnnotations {
   title?: string;

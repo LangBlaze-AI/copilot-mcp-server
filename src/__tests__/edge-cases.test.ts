@@ -1,7 +1,5 @@
-import {
-  AskToolHandler,
-  SuggestToolHandler,
-} from '../tools/handlers.js';
+import { askTool } from '../tools/ask.tool.js';
+import { suggestTool } from '../tools/suggest.tool.js';
 import { executeCommand } from '../utils/command.js';
 import { DEFAULT_COPILOT_MODEL, COPILOT_DEFAULT_MODEL_ENV_VAR } from '../types.js';
 
@@ -40,9 +38,8 @@ describe('Edge Cases and Copilot Patterns', () => {
     delete process.env[COPILOT_DEFAULT_MODEL_ENV_VAR];
   });
 
-  test('SuggestToolHandler with no target uses default prompt', async () => {
-    const handler = new SuggestToolHandler();
-    await handler.execute({ prompt: 'list files' });
+  test('suggestTool with no target uses default prompt', async () => {
+    await suggestTool.execute({ prompt: 'list files' });
 
     const args = getCallArgs();
     const promptArg = args[1];
@@ -50,8 +47,7 @@ describe('Edge Cases and Copilot Patterns', () => {
   });
 
   test('model parameter is passed through to executeCommand args', async () => {
-    const handler = new AskToolHandler();
-    await handler.execute({ prompt: 'test', model: 'gpt-4o' });
+    await askTool.execute({ prompt: 'test', model: 'gpt-4o' });
 
     const args = getCallArgs();
     const modelIndex = args.indexOf('--model');
@@ -60,8 +56,7 @@ describe('Edge Cases and Copilot Patterns', () => {
   });
 
   test('addDir parameter results in --add-dir in executeCommand args', async () => {
-    const handler = new AskToolHandler();
-    await handler.execute({ prompt: 'test', addDir: '/absolute/path' });
+    await askTool.execute({ prompt: 'test', addDir: '/absolute/path' });
 
     const args = getCallArgs();
     const addDirIndex = args.indexOf('--add-dir');
@@ -71,8 +66,7 @@ describe('Edge Cases and Copilot Patterns', () => {
 
   test('COPILOT_DEFAULT_MODEL_ENV_VAR is used when model param is not provided', async () => {
     process.env[COPILOT_DEFAULT_MODEL_ENV_VAR] = 'claude-sonnet-4-5';
-    const handler = new AskToolHandler();
-    await handler.execute({ prompt: 'test' });
+    await askTool.execute({ prompt: 'test' });
 
     const args = getCallArgs();
     const modelIndex = args.indexOf('--model');
@@ -80,13 +74,11 @@ describe('Edge Cases and Copilot Patterns', () => {
   });
 
   test('empty prompt string is accepted by Zod schema', async () => {
-    const handler = new AskToolHandler();
-    await expect(handler.execute({ prompt: '' })).resolves.toBeDefined();
+    await expect(askTool.execute({ prompt: '' })).resolves.toBeDefined();
   });
 
   test('default model gpt-4.1 is used when no model or env var provided', async () => {
-    const handler = new AskToolHandler();
-    await handler.execute({ prompt: 'test' });
+    await askTool.execute({ prompt: 'test' });
 
     const args = getCallArgs();
     const modelIndex = args.indexOf('--model');

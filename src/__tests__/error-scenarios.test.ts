@@ -1,8 +1,6 @@
-import {
-  AskToolHandler,
-  SuggestToolHandler,
-  ExplainToolHandler,
-} from '../tools/handlers.js';
+import { askTool } from '../tools/ask.tool.js';
+import { suggestTool } from '../tools/suggest.tool.js';
+import { explainTool } from '../tools/explain.tool.js';
 import { executeCommand } from '../utils/command.js';
 import { ToolExecutionError, ValidationError, CommandExecutionError, scrubTokens } from '../errors.js';
 
@@ -27,52 +25,45 @@ describe('Error Handling Scenarios', () => {
     mockedExecuteCommand.mockClear();
   });
 
-  test('AskToolHandler rejects with ToolExecutionError when executeCommand rejects', async () => {
+  test('askTool rejects with ToolExecutionError when executeCommand rejects', async () => {
     mockedExecuteCommand.mockRejectedValue(new Error('command failed with exit code 1'));
-    const handler = new AskToolHandler();
-    await expect(handler.execute({ prompt: 'Test prompt' })).rejects.toThrow(ToolExecutionError);
+    await expect(askTool.execute({ prompt: 'Test prompt' })).rejects.toThrow(ToolExecutionError);
   });
 
-  test('SuggestToolHandler rejects with ToolExecutionError on command failure', async () => {
+  test('suggestTool rejects with ToolExecutionError on command failure', async () => {
     mockedExecuteCommand.mockRejectedValue(new Error('copilot not found'));
-    const handler = new SuggestToolHandler();
-    await expect(handler.execute({ prompt: 'list files' })).rejects.toThrow(ToolExecutionError);
+    await expect(suggestTool.execute({ prompt: 'list files' })).rejects.toThrow(ToolExecutionError);
   });
 
-  test('ExplainToolHandler rejects with ToolExecutionError on command failure', async () => {
+  test('explainTool rejects with ToolExecutionError on command failure', async () => {
     mockedExecuteCommand.mockRejectedValue(new Error('copilot not found'));
-    const handler = new ExplainToolHandler();
-    await expect(handler.execute({ command: 'ls -la' })).rejects.toThrow(ToolExecutionError);
+    await expect(explainTool.execute({ command: 'ls -la' })).rejects.toThrow(ToolExecutionError);
   });
 
-  test('AskToolHandler rejects with ValidationError when addDir contains null byte', async () => {
-    const handler = new AskToolHandler();
+  test('askTool rejects with ValidationError when addDir contains null byte', async () => {
     await expect(
-      handler.execute({ prompt: 'test', addDir: '/path/\0with-null' })
+      askTool.execute({ prompt: 'test', addDir: '/path/\0with-null' })
     ).rejects.toThrow(ValidationError);
     expect(mockedExecuteCommand).not.toHaveBeenCalled();
   });
 
-  test('AskToolHandler rejects with ValidationError when addDir contains path traversal', async () => {
-    const handler = new AskToolHandler();
+  test('askTool rejects with ValidationError when addDir contains path traversal', async () => {
     await expect(
-      handler.execute({ prompt: 'test', addDir: '/path/../traversal' })
+      askTool.execute({ prompt: 'test', addDir: '/path/../traversal' })
     ).rejects.toThrow(ValidationError);
     expect(mockedExecuteCommand).not.toHaveBeenCalled();
   });
 
-  test('AskToolHandler rejects with ValidationError when addDir is not absolute', async () => {
-    const handler = new AskToolHandler();
+  test('askTool rejects with ValidationError when addDir is not absolute', async () => {
     await expect(
-      handler.execute({ prompt: 'test', addDir: 'relative/path' })
+      askTool.execute({ prompt: 'test', addDir: 'relative/path' })
     ).rejects.toThrow(ValidationError);
     expect(mockedExecuteCommand).not.toHaveBeenCalled();
   });
 
-  test('AskToolHandler throws ToolExecutionError when stdout empty and stderr non-empty', async () => {
+  test('askTool throws ToolExecutionError when stdout empty and stderr non-empty', async () => {
     mockedExecuteCommand.mockResolvedValue({ stdout: '', stderr: 'quota error' });
-    const handler = new AskToolHandler();
-    await expect(handler.execute({ prompt: 'test' })).rejects.toThrow(ToolExecutionError);
+    await expect(askTool.execute({ prompt: 'test' })).rejects.toThrow(ToolExecutionError);
   });
 });
 
@@ -82,7 +73,7 @@ describe('Phase 2: Hardened Error Handling', () => {
   });
 
   // ERR-01: ENOENT — binary not found
-  test('AskToolHandler: ENOENT produces user-readable install message, not raw ENOENT', async () => {
+  test('askTool: ENOENT produces user-readable install message, not raw ENOENT', async () => {
     const enoentError = Object.assign(new Error('spawn copilot ENOENT'), { code: 'ENOENT' });
     mockedExecuteCommand.mockRejectedValue(
       new CommandExecutionError(
@@ -91,55 +82,51 @@ describe('Phase 2: Hardened Error Handling', () => {
         enoentError
       )
     );
-    const handler = new AskToolHandler();
-    const rejection = handler.execute({ prompt: 'test' });
+    const rejection = askTool.execute({ prompt: 'test' });
     await expect(rejection).rejects.toThrow(ToolExecutionError);
     await expect(rejection).rejects.toThrow(/not found|not installed/i);
     // Raw 'ENOENT' string must NOT appear in the ToolExecutionError message
     try {
-      await handler.execute({ prompt: 'test' });
+      await askTool.execute({ prompt: 'test' });
     } catch (e) {
       expect((e as Error).message).not.toMatch(/\bENOENT\b/);
     }
   });
 
   // ERR-02: Quota exhaustion
-  test('AskToolHandler: quota error produces "quota exceeded" classification', async () => {
+  test('askTool: quota error produces "quota exceeded" classification', async () => {
     mockedExecuteCommand.mockRejectedValue(
       new CommandExecutionError('copilot', 'Command failed with exit code 402: quota exceeded', new Error('quota'))
     );
-    const handler = new AskToolHandler();
-    await expect(handler.execute({ prompt: 'test' })).rejects.toThrow(ToolExecutionError);
+    await expect(askTool.execute({ prompt: 'test' })).rejects.toThrow(ToolExecutionError);
     try {
-      await handler.execute({ prompt: 'test' });
+      await askTool.execute({ prompt: 'test' });
     } catch (e) {
       expect((e as Error).message).toMatch(/quota exceeded/i);
     }
   });
 
   // ERR-03: Auth failure
-  test('AskToolHandler: auth error produces "authentication failed" classification', async () => {
+  test('askTool: auth error produces "authentication failed" classification', async () => {
     mockedExecuteCommand.mockRejectedValue(
       new CommandExecutionError('copilot', 'Command failed with exit code 401: unauthorized', new Error('auth'))
     );
-    const handler = new AskToolHandler();
-    await expect(handler.execute({ prompt: 'test' })).rejects.toThrow(ToolExecutionError);
+    await expect(askTool.execute({ prompt: 'test' })).rejects.toThrow(ToolExecutionError);
     try {
-      await handler.execute({ prompt: 'test' });
+      await askTool.execute({ prompt: 'test' });
     } catch (e) {
       expect((e as Error).message).toMatch(/authentication failed/i);
     }
   });
 
   // ERR-04: Timeout
-  test('AskToolHandler: timeout error propagates timed-out message', async () => {
+  test('askTool: timeout error propagates timed-out message', async () => {
     mockedExecuteCommand.mockRejectedValue(
       new CommandExecutionError('copilot', 'Command timed out after 60000ms', new Error('Timeout'))
     );
-    const handler = new AskToolHandler();
-    await expect(handler.execute({ prompt: 'test' })).rejects.toThrow(ToolExecutionError);
+    await expect(askTool.execute({ prompt: 'test' })).rejects.toThrow(ToolExecutionError);
     try {
-      await handler.execute({ prompt: 'test' });
+      await askTool.execute({ prompt: 'test' });
     } catch (e) {
       expect((e as Error).message).toMatch(/timed out/i);
     }
@@ -179,41 +166,37 @@ describe('Phase 2: Hardened Error Handling', () => {
     }
   });
 
-  // CLI-06: ANSI stripping via handler
-  test('AskToolHandler: ANSI escape codes in stdout are stripped from response', async () => {
+  // CLI-06: ANSI stripping via extractResponse
+  test('askTool: ANSI escape codes in stdout are stripped from response', async () => {
     // stdout contains ANSI red color sequence around the response text
     const ansiStdout = '\u001B[31mHello from Copilot\u001B[0m';
     mockedExecuteCommand.mockResolvedValue({ stdout: ansiStdout, stderr: '' });
-    const handler = new AskToolHandler();
-    const result = await handler.execute({ prompt: 'test' });
-    const text = result.content[0].type === 'text' ? result.content[0].text : '';
-    expect(text).toBe('Hello from Copilot');
+    const result = await askTool.execute({ prompt: 'test' });
+    expect(result).toBe('Hello from Copilot');
     // ANSI escape sequence must not appear in output
-    expect(text).not.toContain('\u001B');
+    expect(result).not.toContain('\u001B');
   });
 
-  // SuggestToolHandler and ExplainToolHandler: verify they also classify errors
-  test('SuggestToolHandler: auth error produces "authentication failed" classification', async () => {
+  // suggestTool and explainTool: verify they also classify errors
+  test('suggestTool: auth error produces "authentication failed" classification', async () => {
     mockedExecuteCommand.mockRejectedValue(
       new CommandExecutionError('copilot', 'Command failed with exit code 401: unauthenticated', new Error('auth'))
     );
-    const handler = new SuggestToolHandler();
-    await expect(handler.execute({ prompt: 'list files' })).rejects.toThrow(ToolExecutionError);
+    await expect(suggestTool.execute({ prompt: 'list files' })).rejects.toThrow(ToolExecutionError);
     try {
-      await handler.execute({ prompt: 'list files' });
+      await suggestTool.execute({ prompt: 'list files' });
     } catch (e) {
       expect((e as Error).message).toMatch(/authentication failed/i);
     }
   });
 
-  test('ExplainToolHandler: quota error produces "quota exceeded" classification', async () => {
+  test('explainTool: quota error produces "quota exceeded" classification', async () => {
     mockedExecuteCommand.mockRejectedValue(
       new CommandExecutionError('copilot', 'Command failed with exit code 402: rate limit exceeded', new Error('quota'))
     );
-    const handler = new ExplainToolHandler();
-    await expect(handler.execute({ command: 'ls -la' })).rejects.toThrow(ToolExecutionError);
+    await expect(explainTool.execute({ command: 'ls -la' })).rejects.toThrow(ToolExecutionError);
     try {
-      await handler.execute({ command: 'ls -la' });
+      await explainTool.execute({ command: 'ls -la' });
     } catch (e) {
       expect((e as Error).message).toMatch(/quota exceeded/i);
     }
@@ -226,36 +209,30 @@ describe('Hybrid Soft Timeout', () => {
   });
 
   // Soft timeout resolves (does not throw) with partial output prefix
-  test('AskToolHandler: soft timeout resolves with partial output prefix', async () => {
+  test('askTool: soft timeout resolves with partial output prefix', async () => {
     mockedExecuteCommand.mockResolvedValue({
       stdout: '[Soft timeout - partial output]\nPartial Copilot response',
       stderr: '',
     });
-    const handler = new AskToolHandler();
-    const result = await handler.execute({ prompt: 'test', softTimeoutMs: 5000 });
-    const text = result.content[0].type === 'text' ? result.content[0].text : '';
-    expect(text).toContain('[Soft timeout - partial output]');
-    expect(text).toContain('Partial Copilot response');
+    const result = await askTool.execute({ prompt: 'test', softTimeoutMs: 5000 });
+    expect(result).toContain('[Soft timeout - partial output]');
+    expect(result).toContain('Partial Copilot response');
   });
 
   // Soft timeout with no output yet still resolves (not rejects)
-  test('AskToolHandler: soft timeout with empty stdout resolves to prefix only', async () => {
+  test('askTool: soft timeout with empty stdout resolves to prefix only', async () => {
     mockedExecuteCommand.mockResolvedValue({
       stdout: '[Soft timeout - partial output]\n',
       stderr: '',
     });
-    const handler = new AskToolHandler();
-    const result = await handler.execute({ prompt: 'test', softTimeoutMs: 1000 });
-    const text = result.content[0].type === 'text' ? result.content[0].text : '';
-    expect(text).toContain('[Soft timeout - partial output]');
-    expect(result.content[0]).not.toHaveProperty('isError');
+    const result = await askTool.execute({ prompt: 'test', softTimeoutMs: 1000 });
+    expect(result).toContain('[Soft timeout - partial output]');
   });
 
   // softTimeoutMs is forwarded to executeCommand
-  test('AskToolHandler: passes softTimeoutMs to executeCommand', async () => {
+  test('askTool: passes softTimeoutMs to executeCommand', async () => {
     mockedExecuteCommand.mockResolvedValue({ stdout: 'response', stderr: '' });
-    const handler = new AskToolHandler();
-    await handler.execute({ prompt: 'hello', softTimeoutMs: 30000 });
+    await askTool.execute({ prompt: 'hello', softTimeoutMs: 30000 });
     expect(mockedExecuteCommand).toHaveBeenCalledWith(
       expect.any(String),
       expect.any(Array),
@@ -265,10 +242,9 @@ describe('Hybrid Soft Timeout', () => {
   });
 
   // Time budget prefix is injected into the prompt when softTimeoutMs is set
-  test('AskToolHandler: injects time budget prefix into prompt when softTimeoutMs is set', async () => {
+  test('askTool: injects time budget prefix into prompt when softTimeoutMs is set', async () => {
     mockedExecuteCommand.mockResolvedValue({ stdout: 'response', stderr: '' });
-    const handler = new AskToolHandler();
-    await handler.execute({ prompt: 'my question', softTimeoutMs: 1800000 });
+    await askTool.execute({ prompt: 'my question', softTimeoutMs: 1800000 });
     const calledArgs = mockedExecuteCommand.mock.calls[0][1] as string[];
     const promptArg = calledArgs[calledArgs.indexOf('-p') + 1];
     expect(promptArg).toContain('[Time budget: 30m.');
@@ -276,21 +252,19 @@ describe('Hybrid Soft Timeout', () => {
   });
 
   // Without softTimeoutMs, no time budget prefix is injected
-  test('AskToolHandler: no time budget prefix when softTimeoutMs is absent', async () => {
+  test('askTool: no time budget prefix when softTimeoutMs is absent', async () => {
     mockedExecuteCommand.mockResolvedValue({ stdout: 'response', stderr: '' });
-    const handler = new AskToolHandler();
-    await handler.execute({ prompt: 'my question' });
+    await askTool.execute({ prompt: 'my question' });
     const calledArgs = mockedExecuteCommand.mock.calls[0][1] as string[];
     const promptArg = calledArgs[calledArgs.indexOf('-p') + 1];
     expect(promptArg).not.toContain('[Time budget:');
     expect(promptArg).toBe('my question');
   });
 
-  // SuggestToolHandler also supports softTimeoutMs
-  test('SuggestToolHandler: passes softTimeoutMs to executeCommand', async () => {
+  // suggestTool also supports softTimeoutMs
+  test('suggestTool: passes softTimeoutMs to executeCommand', async () => {
     mockedExecuteCommand.mockResolvedValue({ stdout: 'ls -la', stderr: '' });
-    const handler = new SuggestToolHandler();
-    await handler.execute({ prompt: 'list files', softTimeoutMs: 10000 });
+    await suggestTool.execute({ prompt: 'list files', softTimeoutMs: 10000 });
     expect(mockedExecuteCommand).toHaveBeenCalledWith(
       expect.any(String),
       expect.any(Array),
@@ -299,11 +273,10 @@ describe('Hybrid Soft Timeout', () => {
     );
   });
 
-  // ExplainToolHandler also supports softTimeoutMs
-  test('ExplainToolHandler: passes softTimeoutMs to executeCommand', async () => {
+  // explainTool also supports softTimeoutMs
+  test('explainTool: passes softTimeoutMs to executeCommand', async () => {
     mockedExecuteCommand.mockResolvedValue({ stdout: 'Lists files', stderr: '' });
-    const handler = new ExplainToolHandler();
-    await handler.execute({ command: 'ls -la', softTimeoutMs: 10000 });
+    await explainTool.execute({ command: 'ls -la', softTimeoutMs: 10000 });
     expect(mockedExecuteCommand).toHaveBeenCalledWith(
       expect.any(String),
       expect.any(Array),

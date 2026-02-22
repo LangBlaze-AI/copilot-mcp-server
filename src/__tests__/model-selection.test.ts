@@ -1,4 +1,4 @@
-import { AskToolHandler } from '../tools/handlers.js';
+import { askTool } from '../tools/ask.tool.js';
 import { executeCommand } from '../utils/command.js';
 import { COPILOT_DEFAULT_MODEL_ENV_VAR, DEFAULT_COPILOT_MODEL } from '../types.js';
 
@@ -38,8 +38,7 @@ describe('Model Selection', () => {
   });
 
   test('passing model gpt-4o results in --model gpt-4o in executeCommand args', async () => {
-    const handler = new AskToolHandler();
-    await handler.execute({ prompt: 'test', model: 'gpt-4o' });
+    await askTool.execute({ prompt: 'test', model: 'gpt-4o' });
 
     const args = getCallArgs();
     const modelIndex = args.indexOf('--model');
@@ -47,8 +46,7 @@ describe('Model Selection', () => {
   });
 
   test('passing model claude-sonnet-4-5 results in --model claude-sonnet-4-5', async () => {
-    const handler = new AskToolHandler();
-    await handler.execute({ prompt: 'test', model: 'claude-sonnet-4-5' });
+    await askTool.execute({ prompt: 'test', model: 'claude-sonnet-4-5' });
 
     const args = getCallArgs();
     const modelIndex = args.indexOf('--model');
@@ -56,8 +54,7 @@ describe('Model Selection', () => {
   });
 
   test('not passing model results in --model gpt-4.1 (DEFAULT_COPILOT_MODEL)', async () => {
-    const handler = new AskToolHandler();
-    await handler.execute({ prompt: 'test' });
+    await askTool.execute({ prompt: 'test' });
 
     const args = getCallArgs();
     const modelIndex = args.indexOf('--model');
@@ -66,8 +63,7 @@ describe('Model Selection', () => {
 
   test('model from COPILOT_DEFAULT_MODEL_ENV_VAR is used when model param is absent', async () => {
     process.env[COPILOT_DEFAULT_MODEL_ENV_VAR] = 'custom-model';
-    const handler = new AskToolHandler();
-    await handler.execute({ prompt: 'test' });
+    await askTool.execute({ prompt: 'test' });
 
     const args = getCallArgs();
     const modelIndex = args.indexOf('--model');

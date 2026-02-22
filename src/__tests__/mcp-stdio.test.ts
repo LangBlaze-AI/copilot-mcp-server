@@ -137,11 +137,12 @@ describe('MCP stdio integration', () => {
       expect(listParse.success).toBe(true);
 
       const toolNames = listResponse.tools.map((t) => t.name);
-      expect(toolNames).toHaveLength(4);
+      expect(toolNames).toHaveLength(5);
       expect(toolNames).toContain('ask');
       expect(toolNames).toContain('suggest');
       expect(toolNames).toContain('explain');
       expect(toolNames).toContain('ping');
+      expect(toolNames).toContain('identity');
     });
 
     test('stdout response test: ask tool returns stub stdout content (CLI-04)', async () => {

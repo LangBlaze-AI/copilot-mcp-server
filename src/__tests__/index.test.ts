@@ -17,18 +17,18 @@ jest.mock('../utils/command.js', () => ({
 }));
 
 import { TOOLS } from '../types.js';
-import { toolDefinitions } from '../tools/definitions.js';
+import {
+  getToolDefinitions,
+  toolExists,
+} from '../tools/index.js';
+import { askTool } from '../tools/ask.tool.js';
+import { suggestTool } from '../tools/suggest.tool.js';
+import { explainTool } from '../tools/explain.tool.js';
+import { pingTool } from '../tools/simple-tools.js';
 import {
   CallToolResultSchema,
   ListToolsResultSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import {
-  toolHandlers,
-  AskToolHandler,
-  SuggestToolHandler,
-  ExplainToolHandler,
-  PingToolHandler,
-} from '../tools/handlers.js';
 import { CopilotMcpServer } from '../server.js';
 import { ValidationError } from '../errors.js';
 import { executeCommand } from '../utils/command.js';
@@ -45,109 +45,101 @@ function getCallArgs(): string[] {
 
 describe('Copilot MCP Server', () => {
   describe('Tool Definitions', () => {
-    test('should have exactly 4 tools defined', () => {
-      expect(toolDefinitions).toHaveLength(4);
-      const toolNames = toolDefinitions.map((tool) => tool.name);
+    test('should have exactly 5 tools defined', () => {
+      const defs = getToolDefinitions();
+      expect(defs).toHaveLength(5);
+      const toolNames = defs.map((tool) => tool.name);
       expect(toolNames).toContain(TOOLS.ASK);
       expect(toolNames).toContain(TOOLS.SUGGEST);
       expect(toolNames).toContain(TOOLS.EXPLAIN);
       expect(toolNames).toContain(TOOLS.PING);
+      expect(toolNames).toContain(TOOLS.IDENTITY);
     });
 
     test('ask tool should have required prompt parameter', () => {
-      const askTool = toolDefinitions.find((tool) => tool.name === TOOLS.ASK);
-      expect(askTool).toBeDefined();
-      expect(askTool?.inputSchema.required).toContain('prompt');
+      const def = getToolDefinitions().find((tool) => tool.name === TOOLS.ASK);
+      expect(def).toBeDefined();
+      expect(def?.inputSchema.required).toContain('prompt');
     });
 
     test('suggest tool should have required prompt parameter', () => {
-      const suggestTool = toolDefinitions.find((tool) => tool.name === TOOLS.SUGGEST);
-      expect(suggestTool).toBeDefined();
-      expect(suggestTool?.inputSchema.required).toContain('prompt');
+      const def = getToolDefinitions().find((tool) => tool.name === TOOLS.SUGGEST);
+      expect(def).toBeDefined();
+      expect(def?.inputSchema.required).toContain('prompt');
     });
 
     test('explain tool should have required command parameter', () => {
-      const explainTool = toolDefinitions.find((tool) => tool.name === TOOLS.EXPLAIN);
-      expect(explainTool).toBeDefined();
-      expect(explainTool?.inputSchema.required).toContain('command');
+      const def = getToolDefinitions().find((tool) => tool.name === TOOLS.EXPLAIN);
+      expect(def).toBeDefined();
+      expect(def?.inputSchema.required).toContain('command');
     });
 
     test('ping tool should have no required parameters', () => {
-      const pingTool = toolDefinitions.find((tool) => tool.name === TOOLS.PING);
-      expect(pingTool).toBeDefined();
-      expect(pingTool?.inputSchema.required).toEqual([]);
+      const def = getToolDefinitions().find((tool) => tool.name === TOOLS.PING);
+      expect(def).toBeDefined();
+      expect(def?.inputSchema.required).toEqual([]);
     });
   });
 
-  describe('Tool Handlers', () => {
+  describe('Tool Registry', () => {
     beforeEach(() => {
       mockedExecuteCommand.mockClear();
       mockedExecuteCommand.mockResolvedValue({ stdout: 'Test Copilot response', stderr: '' });
     });
 
-    test('should have handlers for all four tools', () => {
-      expect(toolHandlers[TOOLS.ASK]).toBeInstanceOf(AskToolHandler);
-      expect(toolHandlers[TOOLS.SUGGEST]).toBeInstanceOf(SuggestToolHandler);
-      expect(toolHandlers[TOOLS.EXPLAIN]).toBeInstanceOf(ExplainToolHandler);
-      expect(toolHandlers[TOOLS.PING]).toBeInstanceOf(PingToolHandler);
+    test('should have all four tools registered', () => {
+      expect(toolExists(TOOLS.ASK)).toBe(true);
+      expect(toolExists(TOOLS.SUGGEST)).toBe(true);
+      expect(toolExists(TOOLS.EXPLAIN)).toBe(true);
+      expect(toolExists(TOOLS.PING)).toBe(true);
     });
 
-    test('all handlers should have execute methods', () => {
-      expect(typeof toolHandlers[TOOLS.ASK].execute).toBe('function');
-      expect(typeof toolHandlers[TOOLS.SUGGEST].execute).toBe('function');
-      expect(typeof toolHandlers[TOOLS.EXPLAIN].execute).toBe('function');
-      expect(typeof toolHandlers[TOOLS.PING].execute).toBe('function');
+    test('all tools should have execute methods', () => {
+      expect(typeof askTool.execute).toBe('function');
+      expect(typeof suggestTool.execute).toBe('function');
+      expect(typeof explainTool.execute).toBe('function');
+      expect(typeof pingTool.execute).toBe('function');
     });
 
-    test('ping handler should return running confirmation without calling executeCommand', async () => {
-      const handler = new PingToolHandler();
-      const result = await handler.execute({});
+    test('ping tool should return running confirmation without calling executeCommand', async () => {
+      const result = await pingTool.execute({});
 
-      expect(result.content).toHaveLength(1);
-      expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toBe('Copilot MCP Server is running.');
+      expect(result).toBe('Copilot MCP Server is running.');
       expect(mockedExecuteCommand).not.toHaveBeenCalled();
     });
 
-    test('ask handler should return stdout content', async () => {
-      const handler = new AskToolHandler();
-      const result = await handler.execute({ prompt: 'What is TypeScript?' });
+    test('ask tool should return stdout content', async () => {
+      const result = await askTool.execute({ prompt: 'What is TypeScript?' });
 
-      expect(result.content).toHaveLength(1);
-      expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toBe('Test Copilot response');
+      expect(result).toBe('Test Copilot response');
     });
 
-    test('suggest handler with target=shell constructs prompt with shell command', async () => {
-      const handler = new SuggestToolHandler();
-      await handler.execute({ prompt: 'list files', target: 'shell' });
+    test('suggest tool with target=shell constructs prompt with shell command', async () => {
+      await suggestTool.execute({ prompt: 'list files', target: 'shell' });
 
       const args = getCallArgs();
       const promptArg = args[1]; // second arg is the prompt after '-p'
       expect(promptArg).toContain('shell command');
     });
 
-    test('suggest handler with target=git constructs prompt with git command', async () => {
-      const handler = new SuggestToolHandler();
-      await handler.execute({ prompt: 'create branch', target: 'git' });
+    test('suggest tool with target=git constructs prompt with git command', async () => {
+      await suggestTool.execute({ prompt: 'create branch', target: 'git' });
 
       const args = getCallArgs();
       const promptArg = args[1];
       expect(promptArg).toContain('git command');
     });
 
-    test('suggest handler with target=gh constructs prompt with GitHub CLI (gh)', async () => {
-      const handler = new SuggestToolHandler();
-      await handler.execute({ prompt: 'list prs', target: 'gh' });
+    test('suggest tool with target=gh constructs prompt with GitHub CLI (gh)', async () => {
+      await suggestTool.execute({ prompt: 'list prs', target: 'gh' });
 
       const args = getCallArgs();
       const promptArg = args[1];
       expect(promptArg).toContain('GitHub CLI (gh)');
     });
 
-    test('explain handler wraps command in explain prompt', async () => {
-      const handler = new ExplainToolHandler();
-      await handler.execute({ command: 'ls -la' });
+    test('explain tool wraps command in explain prompt', async () => {
+      await explainTool.execute({ command: 'ls -la' });
 
       const args = getCallArgs();
       const promptArg = args[1];
@@ -155,10 +147,9 @@ describe('Copilot MCP Server', () => {
       expect(promptArg).toContain('Explain');
     });
 
-    test('ask handler with non-absolute addDir throws ValidationError', async () => {
-      const handler = new AskToolHandler();
+    test('ask tool with non-absolute addDir throws ValidationError', async () => {
       await expect(
-        handler.execute({ prompt: 'test', addDir: 'relative/path' })
+        askTool.execute({ prompt: 'test', addDir: 'relative/path' })
       ).rejects.toThrow(ValidationError);
     });
   });
@@ -182,7 +173,7 @@ describe('Copilot MCP Server', () => {
 
     test('tool definitions should validate against ListToolsResultSchema', () => {
       const parsed = ListToolsResultSchema.safeParse({
-        tools: toolDefinitions,
+        tools: getToolDefinitions(),
       });
       expect(parsed.success).toBe(true);
     });

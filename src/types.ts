@@ -6,6 +6,7 @@ export const TOOLS = {
   SUGGEST: 'suggest',
   EXPLAIN: 'explain',
   PING: 'ping',
+  IDENTITY: 'identity',
 } as const;
 
 export type ToolName = (typeof TOOLS)[keyof typeof TOOLS];

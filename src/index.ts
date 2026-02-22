@@ -2,10 +2,14 @@
 
 import chalk from 'chalk';
 import { CopilotMcpServer } from './server.js';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const pkg = require('../package.json');
 
 const SERVER_CONFIG = {
   name: 'Copilot MCP Server',
-  version: '0.0.6',
+  version: pkg.version,
 } as const;
 
 async function main(): Promise<void> {

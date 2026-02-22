@@ -13,6 +13,10 @@ import {
 } from '../types.js';
 import { executeCommand } from '../utils/command.js';
 import { ToolExecutionError, ValidationError, scrubTokens } from '../errors.js';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const pkg = require('../../package.json');
 
 // Default no-op context for handlers that don't need progress
 const defaultContext: ToolHandlerContext = {
@@ -175,10 +179,25 @@ export class PingToolHandler {
   }
 }
 
+// Identity tool handler — reports server name, version, and active LLM
+export class IdentityToolHandler {
+  async execute(_args: unknown, _context: ToolHandlerContext = defaultContext): Promise<ToolResult> {
+    return {
+      content: [{ type: 'text', text: JSON.stringify({
+        server: 'Copilot MCP Server',
+        version: pkg.version,
+        mcp_server_name: 'copilot-cli',
+        llm: process.env[COPILOT_DEFAULT_MODEL_ENV_VAR] ?? DEFAULT_COPILOT_MODEL,
+      }, null, 2) }],
+    };
+  }
+}
+
 // Handler registry
 export const toolHandlers = {
   [TOOLS.ASK]: new AskToolHandler(),
   [TOOLS.SUGGEST]: new SuggestToolHandler(),
   [TOOLS.EXPLAIN]: new ExplainToolHandler(),
   [TOOLS.PING]: new PingToolHandler(),
+  [TOOLS.IDENTITY]: new IdentityToolHandler(),
 } as const;
